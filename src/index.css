@@ -1,0 +1,159 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-display: 'Bricolage Grotesque', sans-serif;
+    --font-sans: 'Plus Jakarta Sans', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+    --bg-canvas: #FFFDF7;
+    --ink-black: #0F0F0F;
+    --pop-orange: #FF5722;
+    --pop-yellow: #FACC15;
+    --pop-blue: #1D4ED8;
+    --pop-pink: #E11D48;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background-color: var(--bg-canvas);
+    color: var(--ink-black);
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1, h2, h3, h4, .font-display {
+    font-family: var(--font-display);
+    text-wrap: balance;
+  }
+
+  .font-mono, .tabular-nums {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Desi Pop-Art Halftone & Screenprint Utilities */
+.bg-halftone-light {
+  background-color: #FFFDF7;
+  background-image: radial-gradient(rgba(15, 15, 15, 0.11) 1px, transparent 1px);
+  background-size: 16px 16px;
+}
+
+.bg-halftone-yellow {
+  background-color: #FACC15;
+  background-image: radial-gradient(rgba(15, 15, 15, 0.16) 1.25px, transparent 1.25px);
+  background-size: 14px 14px;
+}
+
+.bg-halftone-orange {
+  background-color: #FF5722;
+  background-image: radial-gradient(rgba(15, 15, 15, 0.18) 1.25px, transparent 1.25px);
+  background-size: 14px 14px;
+}
+
+.bg-halftone-blue {
+  background-color: #1D4ED8;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.16) 1.25px, transparent 1.25px);
+  background-size: 14px 14px;
+}
+
+.bg-halftone-dark {
+  background-color: #0F0F0F;
+  background-image: radial-gradient(rgba(255, 253, 247, 0.12) 1px, transparent 1px);
+  background-size: 16px 16px;
+}
+
+.pop-shadow {
+  box-shadow: 4px 4px 0px #0F0F0F;
+}
+
+.pop-shadow-lg {
+  box-shadow: 6px 6px 0px #0F0F0F;
+}
+
+.pop-shadow-orange {
+  box-shadow: 5px 5px 0px #FF5722;
+}
+
+.pop-shadow-yellow {
+  box-shadow: 5px 5px 0px #FACC15;
+}
+
+.pop-card-interactive {
+  transition: transform 160ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.pop-card-interactive:hover {
+  transform: translate(-2px, -2px);
+}
+
+/* Official Google Sign-In Material Button Style (workspace-integration) */
+.gsi-material-button {
+  -moz-user-select: none;
+  -webkit-user-select: none;
+  -ms-user-select: none;
+  -webkit-appearance: none;
+  background-color: #FFFFFF;
+  background-image: none;
+  border: 2px solid #0F0F0F;
+  border-radius: 8px;
+  box-sizing: border-box;
+  color: #0F0F0F;
+  cursor: pointer;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  height: 44px;
+  letter-spacing: 0.15px;
+  outline: none;
+  overflow: hidden;
+  padding: 0 16px;
+  position: relative;
+  text-align: center;
+  transition: transform 150ms cubic-bezier(0.16, 1, 0.3, 1);
+  vertical-align: middle;
+  white-space: nowrap;
+  width: 100%;
+  box-shadow: 4px 4px 0px #0F0F0F;
+}
+
+.gsi-material-button:hover {
+  transform: translate(-1px, -1px);
+  background-color: #FFFDF7;
+}
+
+.gsi-material-button:active {
+  transform: translate(1px, 1px);
+}
+
+.gsi-material-button .gsi-material-button-content-wrapper {
+  align-items: center;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  height: 100%;
+  justify-content: center;
+  position: relative;
+  width: 100%;
+  gap: 10px;
+}
+
+.gsi-material-button .gsi-material-button-icon {
+  height: 20px;
+  width: 20px;
+  min-width: 20px;
+}
+
+.gsi-material-button .gsi-material-button-contents {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

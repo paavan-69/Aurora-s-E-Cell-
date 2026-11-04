@@ -1,0 +1,6 @@
+{
+  "name": "Aurora E-Cell — Official Portal",
+  "description": "Official Entrepreneurship Cell portal and administration dashboard for Aurora Degree & PG College, featuring Desi Pop-Art design, event management, startup incubation showcase, and Google Sheets sync.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

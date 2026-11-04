@@ -1,0 +1,433 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Pillar 1: Global Default-Deny Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Global Primitives
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Bootstrapped Admin Email Check — strictly enforces email_verified == true (Email Spoofing Guard)
+    function isBootstrappedAdminEmail() {
+      return isSignedIn() &&
+        request.auth.token.email_verified == true && (
+          request.auth.token.email == 'paavanjampa@gmail.com' ||
+          request.auth.token.email == 'adminecell@gmail.com'
+        );
+    }
+
+    // Trusted Database Admin Lookup + Verified Bootstrapped Admin
+    function isAdmin() {
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        isBootstrappedAdminEmail()
+      );
+    }
+
+    // Validation Helpers (Pillar 2: Anti-Update-Gap)
+    function isValidUserProfile(data) {
+      return data.keys().hasAll([
+          'uid', 'fullName', 'email', 'role', 'accountStatus',
+          'registrationDate', 'registrationTime', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'uid', 'fullName', 'email', 'role', 'accountStatus',
+          'registrationDate', 'registrationTime', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.uid) &&
+        data.fullName is string && data.fullName.size() >= 1 && data.fullName.size() <= 120 &&
+        data.email is string && data.email.size() >= 3 && data.email.size() <= 180 &&
+        data.role is string && (data.role == 'student' || data.role == 'admin') &&
+        data.accountStatus is string && (data.accountStatus == 'active' || data.accountStatus == 'suspended') &&
+        data.registrationDate is string && data.registrationDate.size() >= 1 && data.registrationDate.size() <= 32 &&
+        data.registrationTime is string && data.registrationTime.size() >= 1 && data.registrationTime.size() <= 32 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidAdminRole(data) {
+      return data.keys().hasAll(['uid', 'email', 'serverGrantCode', 'grantedAt']) &&
+        data.keys().hasOnly(['uid', 'email', 'serverGrantCode', 'grantedAt']) &&
+        isValidId(data.uid) &&
+        data.email is string && data.email.size() >= 3 && data.email.size() <= 180 &&
+        data.serverGrantCode is string && data.serverGrantCode.size() >= 16 && data.serverGrantCode.size() <= 128 &&
+        data.grantedAt is timestamp;
+    }
+
+    function isValidEventItem(data) {
+      return data.keys().hasAll([
+          'id', 'title', 'description', 'posterUrl', 'date', 'time', 'venue',
+          'eventStatus', 'additionalInfo', 'registrationUrl', 'published',
+          'authorId', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'title', 'description', 'posterUrl', 'date', 'time', 'venue',
+          'eventStatus', 'additionalInfo', 'registrationUrl', 'published',
+          'authorId', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.id) &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 160 &&
+        data.description is string && data.description.size() >= 1 && data.description.size() <= 4000 &&
+        data.posterUrl is string && data.posterUrl.size() <= 800000 &&
+        data.date is string && data.date.size() >= 1 && data.date.size() <= 40 &&
+        data.time is string && data.time.size() >= 1 && data.time.size() <= 40 &&
+        data.venue is string && data.venue.size() >= 1 && data.venue.size() <= 200 &&
+        data.eventStatus is string && (
+          data.eventStatus == 'upcoming' ||
+          data.eventStatus == 'ongoing' ||
+          data.eventStatus == 'completed' ||
+          data.eventStatus == 'cancelled'
+        ) &&
+        data.additionalInfo is string && data.additionalInfo.size() <= 2000 &&
+        data.registrationUrl is string && data.registrationUrl.size() <= 500 &&
+        data.published is bool &&
+        isValidId(data.authorId) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidAchievementItem(data) {
+      return data.keys().hasAll([
+          'id', 'title', 'description', 'imageUrl', 'date',
+          'additionalDetails', 'published', 'authorId', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'title', 'description', 'imageUrl', 'date',
+          'additionalDetails', 'published', 'authorId', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.id) &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 160 &&
+        data.description is string && data.description.size() >= 1 && data.description.size() <= 4000 &&
+        data.imageUrl is string && data.imageUrl.size() <= 800000 &&
+        data.date is string && data.date.size() >= 1 && data.date.size() <= 40 &&
+        data.additionalDetails is string && data.additionalDetails.size() <= 2000 &&
+        data.published is bool &&
+        isValidId(data.authorId) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidStartupItem(data) {
+      return data.keys().hasAll([
+          'id', 'name', 'logoUrl', 'description', 'category', 'founderInfo',
+          'imageUrl', 'currentStatus', 'additionalDetails', 'published',
+          'authorId', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'name', 'logoUrl', 'description', 'category', 'founderInfo',
+          'imageUrl', 'currentStatus', 'additionalDetails', 'published',
+          'authorId', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.id) &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 160 &&
+        data.logoUrl is string && data.logoUrl.size() <= 800000 &&
+        data.description is string && data.description.size() >= 1 && data.description.size() <= 4000 &&
+        data.category is string && data.category.size() >= 1 && data.category.size() <= 120 &&
+        data.founderInfo is string && data.founderInfo.size() <= 1000 &&
+        data.imageUrl is string && data.imageUrl.size() <= 800000 &&
+        data.currentStatus is string && (
+          data.currentStatus == 'ideation' ||
+          data.currentStatus == 'incubating' ||
+          data.currentStatus == 'mvp' ||
+          data.currentStatus == 'funded' ||
+          data.currentStatus == 'graduated'
+        ) &&
+        data.additionalDetails is string && data.additionalDetails.size() <= 2000 &&
+        data.published is bool &&
+        isValidId(data.authorId) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidLoginActivity(data) {
+      return data.keys().hasAll([
+          'id', 'userId', 'email', 'loginDate', 'loginTime', 'loginMethod', 'createdAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'userId', 'email', 'loginDate', 'loginTime', 'loginMethod', 'createdAt'
+        ]) &&
+        isValidId(data.id) &&
+        isValidId(data.userId) &&
+        data.email is string && data.email.size() >= 3 && data.email.size() <= 180 &&
+        data.loginDate is string && data.loginDate.size() >= 1 && data.loginDate.size() <= 32 &&
+        data.loginTime is string && data.loginTime.size() >= 1 && data.loginTime.size() <= 32 &&
+        data.loginMethod is string && (
+          data.loginMethod == 'email_password' ||
+          data.loginMethod == 'google_oauth'
+        ) &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidAdminActivityLog(data) {
+      return data.keys().hasAll([
+          'id', 'adminId', 'adminEmail', 'action', 'targetType', 'targetTitle', 'createdAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'adminId', 'adminEmail', 'action', 'targetType', 'targetTitle', 'createdAt'
+        ]) &&
+        isValidId(data.id) &&
+        isValidId(data.adminId) &&
+        data.adminEmail is string && data.adminEmail.size() >= 3 && data.adminEmail.size() <= 180 &&
+        data.action is string && data.action.size() >= 1 && data.action.size() <= 200 &&
+        data.targetType is string && (
+          data.targetType == 'event' ||
+          data.targetType == 'achievement' ||
+          data.targetType == 'startup' ||
+          data.targetType == 'user' ||
+          data.targetType == 'sheets_sync'
+        ) &&
+        data.targetTitle is string && data.targetTitle.size() <= 200 &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidSyncSettings(data) {
+      return data.keys().hasAll([
+          'id', 'spreadsheetId', 'spreadsheetUrl', 'lastSyncedAt', 'updatedBy', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'spreadsheetId', 'spreadsheetUrl', 'lastSyncedAt', 'updatedBy', 'updatedAt'
+        ]) &&
+        isValidId(data.id) &&
+        data.spreadsheetId is string && data.spreadsheetId.size() <= 200 &&
+        data.spreadsheetUrl is string && data.spreadsheetUrl.size() <= 500 &&
+        data.lastSyncedAt is string && data.lastSyncedAt.size() <= 64 &&
+        isValidId(data.updatedBy) &&
+        data.updatedAt is timestamp;
+    }
+
+    // Connection test path (read-only)
+    match /test/{docId} {
+      allow get: if isValidId(docId);
+      allow list, create, update, delete: if false;
+    }
+
+    // 1. /users/{userId}
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+
+      allow create: if isSignedIn() &&
+        isValidId(userId) &&
+        isValidUserProfile(incoming()) &&
+        incoming().uid == userId &&
+        incoming().uid == request.auth.uid &&
+        incoming().accountStatus == 'active' &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        (incoming().role == 'student' || isAdmin());
+
+      allow update: if isSignedIn() &&
+        isValidId(userId) &&
+        isValidUserProfile(incoming()) &&
+        incoming().uid == existing().uid &&
+        incoming().email == existing().email &&
+        incoming().registrationDate == existing().registrationDate &&
+        incoming().registrationTime == existing().registrationTime &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time && (
+          // Action 1: Owner updates display name only
+          (
+            isOwner(userId) &&
+            incoming().role == existing().role &&
+            incoming().accountStatus == existing().accountStatus &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['fullName', 'updatedAt'])
+          ) ||
+          // Action 2: Admin updates user status or role
+          (
+            isAdmin() &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['fullName', 'role', 'accountStatus', 'updatedAt'])
+          )
+        );
+
+      allow delete: if isSignedIn() && isValidId(userId) && isAdmin();
+    }
+
+    // 2. /admins/{adminUid}
+    match /admins/{adminUid} {
+      allow get: if isSignedIn() && isValidId(adminUid) && (isOwner(adminUid) || isAdmin());
+      allow list: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+
+      allow create: if isSignedIn() &&
+        isValidId(adminUid) &&
+        isValidAdminRole(incoming()) &&
+        incoming().uid == adminUid &&
+        incoming().uid == request.auth.uid &&
+        incoming().grantedAt == request.time &&
+        (
+          isBootstrappedAdminEmail() ||
+          incoming().serverGrantCode == 'AURORA_ECELL_SERVER_VERIFIED_ADMIN_2026_9F8A7B'
+        );
+
+      allow update, delete: if false;
+    }
+
+    // 3. /events/{eventId}
+    match /events/{eventId} {
+      allow get: if isSignedIn() && isValidId(eventId) && (resource.data.published == true || isAdmin());
+      allow list: if isSignedIn() && (resource.data.published == true || isAdmin());
+
+      allow create: if isSignedIn() &&
+        isValidId(eventId) &&
+        isValidEventItem(incoming()) &&
+        incoming().id == eventId &&
+        incoming().authorId == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        isAdmin();
+
+      allow update: if isSignedIn() &&
+        isValidId(eventId) &&
+        isValidEventItem(incoming()) &&
+        incoming().id == existing().id &&
+        incoming().authorId == existing().authorId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        isAdmin() &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'title', 'description', 'posterUrl', 'date', 'time', 'venue',
+          'eventStatus', 'additionalInfo', 'registrationUrl', 'published', 'updatedAt'
+        ]);
+
+      allow delete: if isSignedIn() && isValidId(eventId) && isAdmin();
+    }
+
+    // 4. /achievements/{achievementId}
+    match /achievements/{achievementId} {
+      allow get: if isSignedIn() && isValidId(achievementId) && (resource.data.published == true || isAdmin());
+      allow list: if isSignedIn() && (resource.data.published == true || isAdmin());
+
+      allow create: if isSignedIn() &&
+        isValidId(achievementId) &&
+        isValidAchievementItem(incoming()) &&
+        incoming().id == achievementId &&
+        incoming().authorId == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        isAdmin();
+
+      allow update: if isSignedIn() &&
+        isValidId(achievementId) &&
+        isValidAchievementItem(incoming()) &&
+        incoming().id == existing().id &&
+        incoming().authorId == existing().authorId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        isAdmin() &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'title', 'description', 'imageUrl', 'date', 'additionalDetails', 'published', 'updatedAt'
+        ]);
+
+      allow delete: if isSignedIn() && isValidId(achievementId) && isAdmin();
+    }
+
+    // 5. /startups/{startupId}
+    match /startups/{startupId} {
+      allow get: if isSignedIn() && isValidId(startupId) && (resource.data.published == true || isAdmin());
+      allow list: if isSignedIn() && (resource.data.published == true || isAdmin());
+
+      allow create: if isSignedIn() &&
+        isValidId(startupId) &&
+        isValidStartupItem(incoming()) &&
+        incoming().id == startupId &&
+        incoming().authorId == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        isAdmin();
+
+      allow update: if isSignedIn() &&
+        isValidId(startupId) &&
+        isValidStartupItem(incoming()) &&
+        incoming().id == existing().id &&
+        incoming().authorId == existing().authorId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        isAdmin() &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'name', 'logoUrl', 'description', 'category', 'founderInfo',
+          'imageUrl', 'currentStatus', 'additionalDetails', 'published', 'updatedAt'
+        ]);
+
+      allow delete: if isSignedIn() && isValidId(startupId) && isAdmin();
+    }
+
+    // 6. /login_activity/{logId}
+    match /login_activity/{logId} {
+      allow get: if isSignedIn() && isValidId(logId) && (resource.data.userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+
+      allow create: if isSignedIn() &&
+        isValidId(logId) &&
+        isValidLoginActivity(incoming()) &&
+        incoming().id == logId &&
+        incoming().userId == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid));
+
+      allow update, delete: if false;
+    }
+
+    // 7. /admin_logs/{logId}
+    match /admin_logs/{logId} {
+      allow get: if isSignedIn() && isValidId(logId) && isAdmin();
+      allow list: if isSignedIn() && (resource.data.adminId == request.auth.uid || isAdmin());
+
+      allow create: if isSignedIn() &&
+        isValidId(logId) &&
+        isValidAdminActivityLog(incoming()) &&
+        incoming().id == logId &&
+        incoming().adminId == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        isAdmin();
+
+      allow update, delete: if false;
+    }
+
+    // 8. /settings/{settingId}
+    match /settings/{settingId} {
+      allow get: if isSignedIn() && isValidId(settingId) && isAdmin();
+      allow list: if isSignedIn() && (resource.data.updatedBy == request.auth.uid || isAdmin());
+
+      allow create: if isSignedIn() &&
+        isValidId(settingId) &&
+        isValidSyncSettings(incoming()) &&
+        incoming().id == settingId &&
+        incoming().updatedBy == request.auth.uid &&
+        incoming().updatedAt == request.time &&
+        isAdmin();
+
+      allow update: if isSignedIn() &&
+        isValidId(settingId) &&
+        isValidSyncSettings(incoming()) &&
+        incoming().id == existing().id &&
+        incoming().updatedBy == request.auth.uid &&
+        incoming().updatedAt == request.time &&
+        isAdmin() &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'spreadsheetId', 'spreadsheetUrl', 'lastSyncedAt', 'updatedBy', 'updatedAt'
+        ]);
+
+      allow delete: if false;
+    }
+  }
+}

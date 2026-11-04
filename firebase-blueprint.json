@@ -1,0 +1,493 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Registered student or administrator user account metadata.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "maxLength": 128,
+          "description": "Firebase Auth UID of the user."
+        },
+        "fullName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "description": "Full display name of the user."
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "maxLength": 180,
+          "description": "Email address of the user."
+        },
+        "role": {
+          "type": "string",
+          "enum": ["student", "admin"],
+          "description": "Assigned role in the portal."
+        },
+        "accountStatus": {
+          "type": "string",
+          "enum": ["active", "suspended"],
+          "description": "Current status of the user account."
+        },
+        "registrationDate": {
+          "type": "string",
+          "maxLength": 32,
+          "description": "Formatted date of registration (YYYY-MM-DD)."
+        },
+        "registrationTime": {
+          "type": "string",
+          "maxLength": 32,
+          "description": "Formatted time of registration (HH:mm:ss)."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server update timestamp."
+        }
+      },
+      "required": [
+        "uid",
+        "fullName",
+        "email",
+        "role",
+        "accountStatus",
+        "registrationDate",
+        "registrationTime",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "AdminRole": {
+      "title": "AdminRole",
+      "description": "Trusted administrator membership registry document verified by the backend.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "maxLength": 128,
+          "description": "Admin Firebase Auth UID."
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "maxLength": 180,
+          "description": "Verified admin email."
+        },
+        "serverGrantCode": {
+          "type": "string",
+          "minLength": 16,
+          "maxLength": 128,
+          "description": "Server-issued authorization token proving backend role verification."
+        },
+        "grantedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when admin role was registered."
+        }
+      },
+      "required": ["uid", "email", "serverGrantCode", "grantedAt"]
+    },
+    "EventItem": {
+      "title": "EventItem",
+      "description": "E-Cell event created and managed by the administrator.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "maxLength": 128
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        },
+        "posterUrl": {
+          "type": "string",
+          "maxLength": 800000
+        },
+        "date": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "time": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "venue": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "eventStatus": {
+          "type": "string",
+          "enum": ["upcoming", "ongoing", "completed", "cancelled"]
+        },
+        "additionalInfo": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "registrationUrl": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "published": {
+          "type": "boolean"
+        },
+        "authorId": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "maxLength": 128
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "description",
+        "posterUrl",
+        "date",
+        "time",
+        "venue",
+        "eventStatus",
+        "additionalInfo",
+        "registrationUrl",
+        "published",
+        "authorId",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "AchievementItem": {
+      "title": "AchievementItem",
+      "description": "Milestone or achievement published by the E-Cell administrator.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "maxLength": 128
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        },
+        "imageUrl": {
+          "type": "string",
+          "maxLength": 800000
+        },
+        "date": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "additionalDetails": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "published": {
+          "type": "boolean"
+        },
+        "authorId": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "maxLength": 128
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "description",
+        "imageUrl",
+        "date",
+        "additionalDetails",
+        "published",
+        "authorId",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "StartupItem": {
+      "title": "StartupItem",
+      "description": "Incubating startup showcased by Aurora E-Cell.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "maxLength": 128
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "logoUrl": {
+          "type": "string",
+          "maxLength": 800000
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        },
+        "category": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "founderInfo": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "imageUrl": {
+          "type": "string",
+          "maxLength": 800000
+        },
+        "currentStatus": {
+          "type": "string",
+          "enum": ["ideation", "incubating", "mvp", "funded", "graduated"]
+        },
+        "additionalDetails": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "published": {
+          "type": "boolean"
+        },
+        "authorId": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "maxLength": 128
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "logoUrl",
+        "description",
+        "category",
+        "founderInfo",
+        "imageUrl",
+        "currentStatus",
+        "additionalDetails",
+        "published",
+        "authorId",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "LoginActivity": {
+      "title": "LoginActivity",
+      "description": "Audit log of every user sign-in event for Google Sheets synchronisation.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "maxLength": 128
+        },
+        "userId": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "maxLength": 128
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "maxLength": 180
+        },
+        "loginDate": {
+          "type": "string",
+          "maxLength": 32
+        },
+        "loginTime": {
+          "type": "string",
+          "maxLength": 32
+        },
+        "loginMethod": {
+          "type": "string",
+          "enum": ["email_password", "google_oauth"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "email",
+        "loginDate",
+        "loginTime",
+        "loginMethod",
+        "createdAt"
+      ]
+    },
+    "AdminActivityLog": {
+      "title": "AdminActivityLog",
+      "description": "Audit trail of administrative CRUD and sync operations.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "maxLength": 128
+        },
+        "adminId": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "maxLength": 128
+        },
+        "adminEmail": {
+          "type": "string",
+          "format": "email",
+          "maxLength": 180
+        },
+        "action": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "targetType": {
+          "type": "string",
+          "enum": ["event", "achievement", "startup", "user", "sheets_sync"]
+        },
+        "targetTitle": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "adminId",
+        "adminEmail",
+        "action",
+        "targetType",
+        "targetTitle",
+        "createdAt"
+      ]
+    },
+    "SyncSettings": {
+      "title": "SyncSettings",
+      "description": "Stores Google Drive master spreadsheet metadata for AURORA E-CELL — USER DATABASE.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "maxLength": 128
+        },
+        "spreadsheetId": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "spreadsheetUrl": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "lastSyncedAt": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "updatedBy": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "maxLength": 128
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "spreadsheetId",
+        "spreadsheetUrl",
+        "lastSyncedAt",
+        "updatedBy",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "User registration records and account status."
+    },
+    "/admins/{adminUid}": {
+      "schema": { "$ref": "#/entities/AdminRole" },
+      "description": "Authorised administrator role lookup documents."
+    },
+    "/events/{eventId}": {
+      "schema": { "$ref": "#/entities/EventItem" },
+      "description": "E-Cell events (published and draft)."
+    },
+    "/achievements/{achievementId}": {
+      "schema": { "$ref": "#/entities/AchievementItem" },
+      "description": "E-Cell achievements and editorial milestones."
+    },
+    "/startups/{startupId}": {
+      "schema": { "$ref": "#/entities/StartupItem" },
+      "description": "Active incubating startups showcase."
+    },
+    "/login_activity/{logId}": {
+      "schema": { "$ref": "#/entities/LoginActivity" },
+      "description": "Historical login activity records."
+    },
+    "/admin_logs/{logId}": {
+      "schema": { "$ref": "#/entities/AdminActivityLog" },
+      "description": "Recent administrator activity logs."
+    },
+    "/settings/{settingId}": {
+      "schema": { "$ref": "#/entities/SyncSettings" },
+      "description": "Google Sheets synchronisation settings."
+    }
+  }
+}
