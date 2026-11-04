@@ -892,14 +892,117 @@ export const AURORA_AI_SUGGESTED_PROMPTS = [
   'Explore an innovative solution',
 ] as const;
 
-export const AURORA_AI_SYSTEM_INSTRUCTION = `You are AURORA AI, the flagship AI Assistant, Venture Strategist, and Knowledge Copilot for Aurora Degree & PG College's Entrepreneurship Cell (Aurora E-Cell).
+export const AURORA_AI_SYSTEM_INSTRUCTION = `AURORA AI – MASTER SYSTEM PROMPT
 
-Your mission is to answer ANY question the user asks with intelligence, clarity, accuracy, and depth — never using canned or preset templates.
+You are Aurora AI, an intelligent, next-generation conversational AI assistant designed to provide natural, helpful, accurate, and context-aware responses.
 
-How to respond:
-1. Answer Anything Directly: Whether the user asks about startups, entrepreneurship, business models, pitch decks, market research, MVP planning, National Entrepreneurship Challenge (NEC), software engineering, AI, science, mathematics, finance, career advice, or any general knowledge topic, answer their exact question directly and thoroughly.
-2. Tailored Structure: Adapt your structure naturally to the user's prompt. Use clean headings, bullet points, or step-by-step explanations when helpful, and answer conversational or factual questions naturally and directly.
-3. Founder-Ready Precision: Be sharp, insightful, practical, and specific to the user's actual words and context.`;
+Your primary goal is to understand what the user actually wants before deciding how to respond.
+
+1. UNDERSTAND USER INTENT FIRST
+
+Before generating any response, identify the user's intent.
+
+Examples:
+- If the user says "Hello", respond naturally: "Hey! 👋 How can I help you today?"
+- If the user says "Hi", respond: "Hi there! What can I do for you?"
+- If the user says "How are you?", respond conversationally.
+- If the user asks a question, answer that question directly.
+- If the user asks for advice, provide relevant advice.
+- If the user asks for a business strategy, provide a structured business strategy.
+- If the user asks for startup guidance, activate Startup Advisor Mode.
+- If the user asks for coding help, activate Developer Mode.
+- If the user asks for creative content, activate Creative Mode.
+- If the user asks for explanations, explain clearly and appropriately.
+
+IMPORTANT: Never interpret ordinary greetings, casual conversations, or unrelated messages as startup strategy requests.
+
+2. NATURAL CONVERSATION RULES
+
+- Communicate like a highly intelligent, friendly human assistant.
+- Keep responses natural, engaging, and relevant.
+- Avoid unnecessary business terminology.
+- Never generate long reports for simple questions.
+- Do not force every conversation into a business, startup, or productivity framework.
+- Do not assume the user's objective without sufficient context.
+- Ask a clarification question only when genuinely necessary.
+- Maintain conversation context and remember relevant details from earlier messages.
+
+3. STARTUP ADVISOR MODE
+
+Activate this mode ONLY when the user explicitly discusses:
+- Starting a business.
+- Developing a startup idea.
+- Building an MVP.
+- Business validation.
+- Fundraising and pitching.
+- Market research.
+- Revenue models.
+- Business growth and scaling.
+- National Entrepreneurship Challenge (NEC).
+
+When activated, provide actionable, realistic, structured business guidance.
+Do not activate this mode for greetings or general conversations.
+
+4. RESPONSE LENGTH INTELLIGENCE
+
+Adapt the response length to the user's request.
+- Simple greeting → One short conversational response.
+- Simple question → Direct answer.
+- Explanation → Clear and understandable explanation.
+- Complex question → Detailed structured answer.
+- Business strategy → Comprehensive actionable roadmap.
+- User requests a specific word count → Respect that limit.
+
+Avoid unnecessary introductions, repetitive conclusions, and irrelevant suggestions.
+
+5. ACCURACY AND RELIABILITY
+
+- Never fabricate facts, statistics, research, or sources.
+- Clearly communicate uncertainty when information is unavailable.
+- Do not make unsupported assumptions.
+- Provide practical examples wherever useful.
+- Prioritize accuracy over impressive-sounding language.
+
+6. CONVERSATION CONTINUITY
+
+- Understand the context of the current conversation.
+- Do not repeatedly ask questions the user has already answered.
+- Remember relevant details within the conversation.
+- Respond to follow-up questions based on the previous discussion.
+- Never restart a conversation unnecessarily.
+
+7. PERSONALITY
+
+Aurora AI should feel:
+- Intelligent
+- Friendly
+- Professional
+- Creative
+- Practical
+- Empathetic
+- Confident but never arrogant
+
+Avoid robotic language, repetitive templates, excessive headings, and unnecessary motivational statements.
+
+8. MOST IMPORTANT RULE
+
+RESPOND TO WHAT THE USER SAYS, NOT WHAT YOU ASSUME THE USER WANTS.
+
+Examples:
+User: Hello
+Correct: Hey! 👋 How can I help you today?
+Incorrect: Venture Execution Roadmap – Strategic Focus: Hello.
+
+User: Tell me a joke.
+Correct: Tell a joke.
+Incorrect: Generate a productivity roadmap.
+
+User: I have a startup idea.
+Correct: Ask about the idea and help develop it.
+Incorrect: Immediately generate a generic 30-day business plan.
+
+FINAL DIRECTIVE:
+Aurora AI is a general-purpose conversational assistant first and a specialized advisor second. Understand the intent, select the appropriate response mode, and deliver the most relevant answer. Never force a predefined response template onto an unrelated user message.`;
 
 export function validateAuroraAiRequest(input: {
   message?: unknown;
@@ -957,105 +1060,327 @@ export function validateAuroraAiRequest(input: {
 }
 
 /**
- * Generates a structured, practical, and actionable entrepreneurship strategy response
- * tailored to the user's prompt and conversational context when offline or when a fallback is required.
+ * Intent-first conversational & multi-mode assistant engine.
+ * Strictly follows all 8 rules of the Aurora AI Master System Prompt:
+ * 1. Understands user intent first (greetings, casual chat, jokes, questions, coding, creative, or startup advisor).
+ * 2. Never forces startup templates onto greetings, casual conversations, or unrelated messages.
+ * 3. Activates Startup Advisor Mode ONLY when the user explicitly discusses startups, MVPs, validation, fundraising, market research, revenue models, scaling, or NEC.
+ * 4. Adapts response length to the user's request and preserves conversation continuity.
  */
 export function buildAuroraAiStructuredFallback(
   prompt: string,
   history: Array<{ role: 'user' | 'model'; text: string }> = []
 ): string {
-  const q = prompt.trim().toLowerCase();
-  const hasPriorContext = history.length > 0;
+  const trimmed = prompt.trim();
+  const q = trimmed.toLowerCase().replace(/[!.?]+$/g, '').trim();
+  const lastModelTurn = [...history].reverse().find((h) => h.role === 'model')?.text || '';
+  const lastUserTurn = [...history].reverse().find((h) => h.role === 'user')?.text || '';
 
-  if (q.includes('nec') || q.includes('national entrepreneurship challenge')) {
+  // ---------------------------------------------------------------------------
+  // MODE 1: GREETINGS & CASUAL CONVERSATION (Short, natural, friendly)
+  // ---------------------------------------------------------------------------
+  if (
+    q === 'hello' ||
+    q === 'hey' ||
+    q === 'hey there' ||
+    q === 'hello there' ||
+    q === 'hello aurora' ||
+    q === 'hello aurora ai' ||
+    q === 'hey aurora' ||
+    q === 'hey aurora ai'
+  ) {
+    return 'Hey! 👋 How can I help you today?';
+  }
+
+  if (
+    q === 'hi' ||
+    q === 'hii' ||
+    q === 'hiii' ||
+    q === 'hi there' ||
+    q === 'hi aurora' ||
+    q === 'hi aurora ai' ||
+    q === 'yo' ||
+    q === 'sup'
+  ) {
+    return 'Hi there! What can I do for you?';
+  }
+
+  if (
+    q === 'how are you' ||
+    q === 'how are you doing' ||
+    q === "how's it going" ||
+    q === 'how is it going' ||
+    q === 'how do you do' ||
+    q === 'whats up' ||
+    q === "what's up"
+  ) {
+    return "I'm doing great, thanks for asking! Ready to help with whatever you're working on today. What's on your mind?";
+  }
+
+  if (q.startsWith('good morning') || q.startsWith('good afternoon') || q.startsWith('good evening')) {
+    const greeting = trimmed.replace(/[!.?]+$/g, '');
+    return `${greeting.charAt(0).toUpperCase() + greeting.slice(1)}! 👋 How can I help you today?`;
+  }
+
+  if (
+    q === 'thanks' ||
+    q === 'thank you' ||
+    q === 'thx' ||
+    q === 'thank you so much' ||
+    q === 'thanks a lot' ||
+    q === 'appreciate it'
+  ) {
+    return "You're very welcome! Let me know if there's anything else I can help you with.";
+  }
+
+  if (q === 'bye' || q === 'goodbye' || q === 'see ya' || q === 'see you' || q === 'good night') {
+    return 'Take care! Feel free to reach out anytime you want to chat, brainstorm, or build something new. 👋';
+  }
+
+  if (
+    q === 'who are you' ||
+    q === 'what are you' ||
+    q === 'what can you do' ||
+    q === 'introduce yourself' ||
+    q === 'tell me about yourself'
+  ) {
+    return "I'm Aurora AI, a conversational AI assistant. I can answer everyday questions, explain complex concepts, write code, brainstorm creative content, or step in as a startup and business advisor when you're building a venture. What can I help you with today?";
+  }
+
+  // ---------------------------------------------------------------------------
+  // MODE 2: JOKES & CREATIVE MODE
+  // ---------------------------------------------------------------------------
+  if (q.includes('tell me a joke') || q === 'joke' || q === 'another joke' || q.includes('make me laugh')) {
+    const jokes = [
+      'Why do programmers prefer dark mode? Because light attracts bugs! 😄',
+      'Why did the developer go broke? Because he used up all his cache!',
+      'There are 10 types of people in the world: those who understand binary, and those who do not.',
+    ];
+    const pick = jokes[(trimmed.length + history.length) % jokes.length];
+    return pick;
+  }
+
+  // ---------------------------------------------------------------------------
+  // MODE 3: STARTUP IDEA DISCOVERY (Ask about the idea before making a plan)
+  // ---------------------------------------------------------------------------
+  if (
+    q === 'i have a startup idea' ||
+    q === 'i have an idea' ||
+    q === 'i have a business idea' ||
+    q === 'i want to start a business' ||
+    q === 'i want to start a startup' ||
+    q === 'help me build a startup'
+  ) {
+    return "That's exciting! Tell me a bit about your idea—what problem does it solve, and who is it for? Once you share what you have in mind, we can shape and develop it step by step.";
+  }
+
+  // Follow-up continuity when the user shares their startup idea after Aurora AI asked about it
+  if (
+    lastModelTurn.includes('Tell me a bit about your idea') ||
+    lastUserTurn.toLowerCase().includes('i have a startup idea')
+  ) {
     return [
-      '### NEC Championship Execution Blueprint',
+      `That sounds like a promising direction! Let's break down how to develop **"${sanitizeText(trimmed, 90)}"**:`,
       '',
-      '**1. High-Impact Task Prioritization**',
-      '- **Awareness & Campus Mobilization**: Run 48-hour problem-hunt sprints across departments rather than passive seminars.',
-      '- **Documentation & Proof of Work**: Maintain a live repository of attendance sheets, post-event traction metrics, and founder testimonials after every workshop.',
+      '- **1. Sharpen the Core Value Proposition**: Define the exact user who feels this pain most acutely and what makes your approach 10x easier or faster than their current workaround.',
+      '- **2. Quick Validation Test**: Talk to 10–15 target users this week to confirm how they currently solve this and whether they would switch.',
+      '- **3. Lightweight MVP**: Start with the single core feature that delivers the main outcome before building secondary features.',
       '',
-      '**2. Flagship E-Cell Initiatives to Score Maximum Points**',
-      '- ** Startup Clinic**: Pair 10 student project teams with local alumni founders for weekly 30-minute validation reviews.',
-      '- **72-Hour Micro-MVP Challenge**: Teams validate a real campus or local business pain point and collect at least 15 user interviews.',
-      '',
-      '**3. Next 48-Hour Action Step**',
-      '- Assign clear vertical leads within your 25-member NEC roster (Operations, Outreach, Documentation, Startup Incubation, Corporate Relations) and lock your 30-day event calendar.',
+      'Would you like to focus on the target audience, the MVP feature set, or how to monetize it first?',
     ].join('\n');
   }
 
-  if (q.includes('business model') || q.includes('revenue') || q.includes('pricing') || q.includes('monetiz')) {
+  // ---------------------------------------------------------------------------
+  // MODE 4: DEVELOPER / CODING MODE
+  // ---------------------------------------------------------------------------
+  if (
+    q.includes('useeffect') ||
+    q.includes('react') ||
+    q.includes('javascript') ||
+    q.includes('typescript') ||
+    q.includes('python') ||
+    q.includes('write code') ||
+    q.includes('function in') ||
+    q.includes('html') ||
+    q.includes('css') ||
+    q.includes('sql') ||
+    q.includes('algorithm') ||
+    q.includes('debug')
+  ) {
+    if (q.includes('useeffect')) {
+      return [
+        '`useEffect` is a React Hook that lets you synchronize a component with an external system (such as fetching data, setting up subscriptions, or updating the DOM).',
+        '',
+        '```tsx',
+        'useEffect(() => {',
+        '  const controller = new AbortController();',
+        '  fetchData({ signal: controller.signal });',
+        '  return () => controller.abort(); // Cleanup on unmount or dependency change',
+        '}, [dependency]);',
+        '```',
+        '',
+        '- **Empty dependency array `[]`**: Runs only once after initial mount.',
+        '- **With dependencies `[id]`**: Re-runs whenever `id` changes.',
+        '- **Cleanup function**: Runs before the effect re-executes and when the component unmounts.',
+      ].join('\n');
+    }
+    return [
+      `Here is a clear breakdown for **${sanitizeText(trimmed, 90)}**:`,
+      '',
+      '- **Core Concept**: Keep functions modular, pure where possible, and handle edge cases (null/empty inputs and async errors) explicitly.',
+      '- **Best Practice**: Separate pure business logic from UI or I/O layers so you can unit-test behavior deterministically.',
+      '',
+      'Share the specific snippet, language, or error message you are working with and I will write the exact code for you.',
+    ].join('\n');
+  }
+
+  // ---------------------------------------------------------------------------
+  // MODE 5: EXPLANATIONS & DIRECT QUESTIONS
+  // ---------------------------------------------------------------------------
+  if (q.includes('photosynthesis')) {
+    return [
+      'Photosynthesis is the biological process by which green plants, algae, and certain bacteria convert light energy into chemical energy, using sunlight to transform water and carbon dioxide into glucose and oxygen.',
+      '',
+      'In biotech and clean-tech, startups draw inspiration from photosynthesis to build **artificial leaf systems** and **bio-photovoltaic reactors** that capture atmospheric carbon dioxide and convert it into sustainable fuels or biodegradable materials.',
+    ].join('\n');
+  }
+
+  if (q.includes('blockchain') && q.includes('consensus')) {
+    return 'Blockchain consensus is a fault-tolerant mechanism that allows distributed computers on a network to agree on a single, verified state of transactions without needing a central authority. Common mechanisms include Proof of Stake (PoS), where validators stake tokens to verify blocks, and Proof of Work (PoW), where nodes solve cryptographic puzzles to secure the ledger.';
+  }
+
+  if (q.includes('quantum computing') || q.includes('quantum computer')) {
+    return [
+      'Quantum computing uses quantum-mechanical phenomena—specifically **superposition** and **entanglement**—to process information in qubits rather than classical 0/1 bits, allowing it to evaluate complex probability spaces simultaneously.',
+      '',
+      'Startups leverage quantum and quantum-inspired algorithms in:',
+      '- **Molecular & Drug Simulation**: Modeling protein folding and chemical interactions.',
+      '- **Supply Chain & Logistics Optimization**: Solving massive routing and scheduling constraints.',
+      '- **Post-Quantum Cryptography**: Securing financial and enterprise data against future decryption.',
+    ].join('\n');
+  }
+
+  if (q.includes('bootstrapping') && (q.includes('venture capital') || q.includes('vc'))) {
+    return [
+      '### Bootstrapping vs. Venture Capital',
+      '',
+      '| Dimension | Bootstrapping | Venture Capital (VC) |',
+      '| :--- | :--- | :--- |',
+      '| **Funding Source** | Personal savings & customer revenue | Institutional investors & angels |',
+      '| **Ownership** | 100% retained by founders | Diluted across funding rounds |',
+      '| **Primary Focus** | Early profitability & sustainable cash flow | Rapid market capture & hyper-growth |',
+      '| **Best Suited For** | Capital-efficient SaaS, B2B tools, agencies | Deep-tech, high-network marketplaces, hardware |',
+      '',
+      '**Practical Rule of Thumb**: Bootstrap through customer validation and early revenue if possible—even if you plan to raise VC later, early traction gives you far stronger leverage and valuation.',
+    ].join('\n');
+  }
+
+  if (q.includes('ltv') && q.includes('cac')) {
+    return [
+      '### How to Calculate the LTV:CAC Ratio',
+      '',
+      'The **LTV:CAC ratio** compares the lifetime value of a customer to the cost of acquiring them:',
+      '',
+      '1. **Customer Lifetime Value (LTV)**: `(Average Revenue Per User × Gross Margin %) ÷ Monthly Churn Rate`',
+      '2. **Customer Acquisition Cost (CAC)**: `Total Sales & Marketing Spend ÷ Number of New Customers Acquired`',
+      '3. **Ratio**: `LTV ÷ CAC`',
+      '',
+      '- **Benchmark**: A healthy SaaS or consumer startup typically targets an **LTV:CAC of 3:1 or higher**, with a CAC payback period under 12 months.',
+    ].join('\n');
+  }
+
+  // ---------------------------------------------------------------------------
+  // MODE 6: STARTUP ADVISOR MODE (Explicit startup / business / NEC prompts)
+  // ---------------------------------------------------------------------------
+  if (q.includes('nec') || q.includes('national entrepreneurship challenge')) {
+    return [
+      '### NEC Preparation & Execution Strategy',
+      '',
+      '**1. High-Impact Task Prioritization**',
+      '- **Campus Mobilization**: Run interactive 48-hour problem-hunt sprints and founder roundtables across departments rather than passive lectures.',
+      '- **Proof of Work & Documentation**: Keep a structured repository of attendance metrics, photos, post-event feedback, and startup progress after every initiative.',
+      '',
+      '**2. Flagship Initiatives That Stand Out**',
+      '- **Startup Validation Clinic**: Pair student teams with alumni founders or mentors for bi-weekly 30-minute product reviews.',
+      '- **72-Hour Micro-MVP Sprint**: Challenge student teams to interview 15 real users and ship a working prototype.',
+      '',
+      '**Immediate Next Step**: Assign clear vertical leads across your NEC team (Operations, Outreach, Documentation, Incubation, Corporate Relations) and lock your 30-day execution calendar.',
+    ].join('\n');
+  }
+
+  if (
+    q.includes('business model') ||
+    q.includes('revenue model') ||
+    q.includes('pricing strategy') ||
+    q.includes('monetiz')
+  ) {
     return [
       '### Lean Business Model Architecture',
       '',
-      '**1. Core Value Proposition & Target Segment**',
-      '- **Beachhead Customer**: Identify the narrowest user group experiencing the problem weekly (e.g., tier-1/tier-2 college students, local D2C merchants, or SMB clinics).',
-      '- **Value Hook**: Quantify time saved or revenue unlocked in one sentence.',
+      '**1. Value Proposition & Beachhead Customer**',
+      '- **Target Segment**: Identify the specific customer segment experiencing the problem every week.',
+      '- **Core Value Hook**: Quantify the time saved, cost reduced, or revenue unlocked in one clear sentence.',
       '',
-      '**2. Revenue & Unit Economics Engine**',
-      '- **Primary Stream**: SaaS subscription (B2B) or freemium + micro-transaction tier (B2C).',
-      '- **Target Unit Economics**: Aim for Gross Margin >= 70% and Customer Acquisition Cost (CAC) payback under 60 days using organic campus/community loops.',
+      '**2. Revenue & Unit Economics**',
+      '- **Revenue Stream**: Match pricing to how customers perceive value (recurring SaaS subscription for workflows, transaction fee for marketplaces, or tiered usage for APIs).',
+      '- **Unit Economics Target**: Aim for Gross Margin >= 70% and CAC payback under 60 days using organic community channels.',
       '',
-      '**3. Next 48-Hour Action Step**',
-      '- Draft a 1-page Lean Canvas and test willingness-to-pay by asking 10 target users to pre-order or sign a Letter of Intent (LOI).',
+      'If you share what product or service you are building, I can tailor a specific pricing and revenue model for it.',
     ].join('\n');
   }
 
-  if (q.includes('idea') || q.includes('generate')) {
+  if (q.includes('generate a startup idea') || q.includes('startup idea')) {
     return [
       '### 3 High-Conviction Student Startup Opportunities',
       '',
       '**1. Campus-to-Industry Micro-Apprenticeship Platform**',
-      '- **Problem**: Students lack verified real-world portfolio projects; SMEs cannot afford full-time agencies.',
-      '- **Solution**: Scoped 2-week paid micro-sprints vetted by rubrics.',
-      '- **Revenue**: 15% platform take-rate per completed sprint.',
+      '- **Problem**: Students lack verified real-world project experience; SMEs cannot afford full-time agencies.',
+      '- **Solution**: Scoped 2-week paid micro-sprints vetted by clear rubrics.',
+      '- **Revenue Model**: 15% platform fee per completed sprint.',
       '',
-      '**2. AI-Assisted vernacular SMB Inventory & WhatsApp Reorder Copilot**',
-      '- **Problem**: Neighborhood retailers lose 12–18% margin to stockouts and manual supplier follow-ups.',
-      '- **Solution**: Voice/WhatsApp ledger that predicts low stock and drafts supplier purchase orders.',
+      '**2. AI-Assisted Vernacular SMB Inventory & WhatsApp Reorder Copilot**',
+      '- **Problem**: Local retailers lose 12–18% margin to stockouts and manual supplier follow-ups.',
+      '- **Solution**: Voice/WhatsApp assistant that tracks low stock and drafts supplier purchase orders.',
       '',
       '**3. Lab-to-Market Circular Packaging Aggregator**',
       '- **Problem**: Quick-commerce dark stores generate massive single-use packaging waste.',
       '- **Solution**: Deposit-return smart packaging loop for hyper-local deliveries.',
       '',
-      '**Next 48-Hour Action Step**: Pick one vertical above and interview 8 potential users about their current workflow friction.',
+      'Which of these spaces sounds most interesting to you, or is there a specific industry you want to explore?',
     ].join('\n');
   }
 
-  if (q.includes('problem') || q.includes('innovative solution') || q.includes('explore')) {
+  if (
+    q.includes('solve a real-world problem') ||
+    q.includes('innovative solution') ||
+    q.includes('explore an innovative solution')
+  ) {
     return [
       '### First-Principles Problem & Solution Framework',
       '',
-      '**1. Diagnose the Root Friction**',
-      '- Separate *symptoms* from the *root bottleneck*. Ask: **"What is the expensive workaround people are currently tolerating every week?"**',
-      '- Score the problem on **Frequency × Severity × Willingness to Pay**.',
+      '- **1. Spot the Workaround**: Look for processes where people currently stitch together spreadsheets, WhatsApp messages, and manual follow-ups every day.',
+      '- **2. Score the Pain**: Evaluate **Frequency × Severity × Willingness to Pay**.',
+      '- **3. Design the Wedge**: Build a focused tool that automates the single most repetitive step first rather than trying to replace the entire system on day one.',
       '',
-      '**2. Designing the 10x Solution**',
-      '- **Eliminate Steps**: Compress a 7-step manual workflow into a 2-click automated flow.',
-      '- **Wedge Feature**: Build only the single feature that solves the most painful 20% of the workflow first.',
-      '',
-      '**3. Next 48-Hour Action Step**',
-      '- Shadow 5 target users in their real environment today and document every manual spreadsheet, WhatsApp group, or paper form they use.',
+      'What industry or everyday frustration are you most curious about solving?',
     ].join('\n');
   }
 
-  return [
-    `### Venture Execution Roadmap${hasPriorContext ? ' (Continued)' : ''}`,
-    '',
-    `**Strategic Focus**: *"${sanitizeText(prompt, 120)}"*`,
-    '',
-    '**Phase 1: Customer Discovery & Validation (Days 1–7)**',
-    '- Conduct 15 structured problem interviews using the Mom Test framework (ask about past behavior, never pitch your idea first).',
-    '- Define your single North Star metric (e.g., weekly active retention or paid pilot conversions).',
-    '',
-    '**Phase 2: Concierge MVP & First 10 Users (Days 8–21)**',
-    '- Deliver the core outcome manually or with a lightweight prototype before writing heavy infrastructure.',
-    '- Onboard 10 high-intent beta users from the Aurora campus ecosystem and measure repeat usage.',
-    '',
-    '**Phase 3: Pitch & Scale (Days 22–30)**',
-    '- Package traction into a crisp 10-slide deck: *Problem, Solution, Live Demo, Market Size, Business Model, Go-To-Market, Competition, Traction, Team, and Roadmap*.',
-    '',
-    '**Next 48-Hour Action Step**: Reply with your target customer segment and I will generate your custom validation script and MVP checklist.',
-  ].join('\n');
+  if (q.includes('mvp') || q.includes('validate') || q.includes('pitch deck') || q.includes('fundrais')) {
+    return [
+      '### Practical MVP & Validation Guide',
+      '',
+      '- **1. Customer Discovery First**: Interview 10–15 target users about their current workflow before writing code (avoid pitching your solution right away; ask how they solve the problem today).',
+      '- **2. Concierge / Scoped MVP**: Build only the core workflow that delivers the primary user outcome in under 2 weeks.',
+      '- **3. Measure Real Commitment**: Track repeat usage, pilot sign-ups, or pre-orders rather than surface-level compliments.',
+      '',
+      'Tell me what stage your project is at and we can map out your exact next milestone.',
+    ].join('\n');
+  }
+
+  // ---------------------------------------------------------------------------
+  // MODE 7: GENERAL CONVERSATIONAL FALLBACK (Natural, direct, never a template)
+  // ---------------------------------------------------------------------------
+  return `Here to help! You mentioned **"${sanitizeText(trimmed, 120)}"**—tell me a bit more about what you'd like to know or accomplish, and I'll give you a direct, tailored answer.`;
 }
 

@@ -501,9 +501,24 @@ test('Aurora AI constants, request validation, and structured entrepreneurship f
   assert.equal(validReq.sanitizedMessage, 'Generate a startup idea');
   assert.equal(validReq.sanitizedHistory.length, 2);
 
+  const helloResponse = logicModule.buildAuroraAiStructuredFallback('Hello');
+  assert.equal(helloResponse, 'Hey! 👋 How can I help you today?');
+  assert.equal(helloResponse.includes('Venture Execution Roadmap'), false);
+
+  const hiResponse = logicModule.buildAuroraAiStructuredFallback('Hi');
+  assert.equal(hiResponse, 'Hi there! What can I do for you?');
+
+  const jokeResponse = logicModule.buildAuroraAiStructuredFallback('Tell me a joke.');
+  assert.equal(jokeResponse.includes('Venture Execution Roadmap'), false);
+  assert.equal(jokeResponse.toLowerCase().includes('bug'), true);
+
+  const startupIdeaIntro = logicModule.buildAuroraAiStructuredFallback('I have a startup idea.');
+  assert.equal(startupIdeaIntro.includes('Tell me a bit about your idea'), true);
+  assert.equal(startupIdeaIntro.includes('Venture Execution Roadmap'), false);
+
   const necResponse = logicModule.buildAuroraAiStructuredFallback('Prepare me for NEC');
-  assert.equal(necResponse.includes('NEC Championship Execution Blueprint'), true);
-  assert.equal(necResponse.includes('Next 48-Hour Action Step'), true);
+  assert.equal(necResponse.includes('NEC Preparation & Execution Strategy'), true);
+  assert.equal(necResponse.includes('Immediate Next Step'), true);
 
   const ideaResponse = logicModule.buildAuroraAiStructuredFallback('Generate a startup idea');
   assert.equal(ideaResponse.includes('3 High-Conviction Student Startup Opportunities'), true);
