@@ -131,8 +131,18 @@ export function StudentPortal({
           </button>
         </nav>
 
-        {/* Zone 3: 1 primary action on desktop + mobile menu toggle */}
+        {/* Zone 3: Admin Console shortcut (if admin) + Log Out + mobile menu toggle */}
         <div className="flex items-center gap-3 shrink-0">
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={onOpenAdminDashboard}
+              className="px-3.5 py-2 text-xs font-display font-extrabold text-[#0F0F0F] bg-[#FACC15] border-2 border-[#0F0F0F] rounded-lg hover:bg-[#FF5722] transition-colors flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer"
+            >
+              <Shield className="w-3.5 h-3.5" />
+              <span>Admin Console (Manage Events)</span>
+            </button>
+          )}
           <button
             type="button"
             onClick={onLogout}

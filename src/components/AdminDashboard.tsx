@@ -507,83 +507,139 @@ export function AdminDashboard({
               <div className="flex flex-wrap items-center gap-3 shrink-0">
                 <button
                   type="button"
+                  onClick={() => setActiveSection('events')}
+                  className="px-4 py-2.5 bg-[#FF5722] text-[#0F0F0F] font-display font-extrabold text-xs border-2 border-[#0F0F0F] rounded-lg pop-shadow hover:bg-[#FACC15] transition-colors flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Add / Manage Events</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveSection('achievements')}
+                  className="px-4 py-2.5 bg-[#FFFDF7] text-[#0F0F0F] font-display font-extrabold text-xs border-2 border-[#0F0F0F] rounded-lg pop-shadow hover:bg-[#FACC15] transition-colors flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer"
+                >
+                  <Award className="w-4 h-4" />
+                  <span>Add / Manage Achievements</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveSection('startups')}
+                  className="px-4 py-2.5 bg-[#FFFDF7] text-[#0F0F0F] font-display font-extrabold text-xs border-2 border-[#0F0F0F] rounded-lg pop-shadow hover:bg-[#FACC15] transition-colors flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer"
+                >
+                  <Rocket className="w-4 h-4" />
+                  <span>Add / Manage Startups</span>
+                </button>
+                <button
+                  type="button"
                   onClick={() => exportMasterDatabaseToExcel({ users, loginLogs })}
                   className="px-4 py-2.5 bg-[#FACC15] text-[#0F0F0F] font-display font-extrabold text-xs border-2 border-[#0F0F0F] rounded-lg pop-shadow hover:bg-[#FF5722] transition-colors flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer"
                 >
                   <Download className="w-4 h-4" />
                   <span>Export Excel (.xlsx)</span>
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveSection('events')}
-                  className="px-4 py-2.5 bg-[#0F0F0F] text-[#FFFDF7] font-display font-bold text-xs rounded-lg hover:bg-[#1D4ED8] transition-colors flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Manage Content</span>
-                </button>
               </div>
             </div>
 
-            {/* 4 Live Database KPI Cards */}
+            {/* 4 Live Database KPI Cards with Direct Management Actions */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              <div className="bg-[#FFFDF7] border-2 border-[#0F0F0F] rounded-xl p-6 pop-shadow">
-                <div className="text-xs font-mono font-bold text-neutral-600 mb-2">
-                  TOTAL REGISTERED USERS
+              <div className="bg-[#FFFDF7] border-2 border-[#0F0F0F] rounded-xl p-6 pop-shadow flex flex-col justify-between">
+                <div>
+                  <div className="text-xs font-mono font-bold text-neutral-600 mb-2">
+                    TOTAL REGISTERED USERS
+                  </div>
+                  <div
+                    data-testid="stat-registered-users"
+                    className="font-mono font-bold text-4xl text-[#0F0F0F] tabular-nums"
+                  >
+                    {stats.totalRegisteredUsers}
+                  </div>
+                  <div className="mt-2 text-xs text-neutral-600">
+                    Synced with User Registrations sheet
+                  </div>
                 </div>
-                <div
-                  data-testid="stat-registered-users"
-                  className="font-mono font-bold text-4xl text-[#0F0F0F] tabular-nums"
+                <button
+                  type="button"
+                  onClick={() => setActiveSection('users')}
+                  className="mt-4 pt-3 border-t border-neutral-200 text-left text-xs font-display font-extrabold text-[#1D4ED8] hover:text-[#FF5722] flex items-center justify-between cursor-pointer"
                 >
-                  {stats.totalRegisteredUsers}
-                </div>
-                <div className="mt-2 text-xs text-neutral-600">
-                  Synced with User Registrations sheet
-                </div>
+                  <span>Manage Users &amp; Sheets</span>
+                  <span>→</span>
+                </button>
               </div>
 
-              <div className="bg-[#FFFDF7] border-2 border-[#0F0F0F] rounded-xl p-6 pop-shadow">
-                <div className="text-xs font-mono font-bold text-[#FF5722] mb-2">
-                  PUBLISHED EVENTS
+              <div className="bg-[#FFFDF7] border-2 border-[#0F0F0F] rounded-xl p-6 pop-shadow flex flex-col justify-between">
+                <div>
+                  <div className="text-xs font-mono font-bold text-[#FF5722] mb-2">
+                    PUBLISHED EVENTS
+                  </div>
+                  <div
+                    data-testid="stat-published-events"
+                    className="font-mono font-bold text-4xl text-[#0F0F0F] tabular-nums"
+                  >
+                    {stats.totalPublishedEvents}
+                  </div>
+                  <div className="mt-2 text-xs text-neutral-600 tabular-nums">
+                    {stats.totalDraftEvents} draft(s) hidden from public
+                  </div>
                 </div>
-                <div
-                  data-testid="stat-published-events"
-                  className="font-mono font-bold text-4xl text-[#0F0F0F] tabular-nums"
+                <button
+                  type="button"
+                  onClick={() => setActiveSection('events')}
+                  className="mt-4 pt-3 border-t border-neutral-200 text-left text-xs font-display font-extrabold text-[#FF5722] hover:text-[#0F0F0F] flex items-center justify-between cursor-pointer"
                 >
-                  {stats.totalPublishedEvents}
-                </div>
-                <div className="mt-2 text-xs text-neutral-600 tabular-nums">
-                  {stats.totalDraftEvents} draft(s) hidden from public
-                </div>
+                  <span>+ Add / Manage Events</span>
+                  <span>→</span>
+                </button>
               </div>
 
-              <div className="bg-[#FFFDF7] border-2 border-[#0F0F0F] rounded-xl p-6 pop-shadow">
-                <div className="text-xs font-mono font-bold text-[#E11D48] mb-2">
-                  TOTAL ACHIEVEMENTS
+              <div className="bg-[#FFFDF7] border-2 border-[#0F0F0F] rounded-xl p-6 pop-shadow flex flex-col justify-between">
+                <div>
+                  <div className="text-xs font-mono font-bold text-[#E11D48] mb-2">
+                    TOTAL ACHIEVEMENTS
+                  </div>
+                  <div
+                    data-testid="stat-published-achievements"
+                    className="font-mono font-bold text-4xl text-[#0F0F0F] tabular-nums"
+                  >
+                    {stats.totalAchievements}
+                  </div>
+                  <div className="mt-2 text-xs text-neutral-600">
+                    Live in Achievements Chronicle
+                  </div>
                 </div>
-                <div
-                  data-testid="stat-published-achievements"
-                  className="font-mono font-bold text-4xl text-[#0F0F0F] tabular-nums"
+                <button
+                  type="button"
+                  onClick={() => setActiveSection('achievements')}
+                  className="mt-4 pt-3 border-t border-neutral-200 text-left text-xs font-display font-extrabold text-[#E11D48] hover:text-[#0F0F0F] flex items-center justify-between cursor-pointer"
                 >
-                  {stats.totalAchievements}
-                </div>
-                <div className="mt-2 text-xs text-neutral-600">
-                  Live in Achievements Chronicle
-                </div>
+                  <span>+ Add / Manage Achievements</span>
+                  <span>→</span>
+                </button>
               </div>
 
-              <div className="bg-[#FFFDF7] border-2 border-[#0F0F0F] rounded-xl p-6 pop-shadow">
-                <div className="text-xs font-mono font-bold text-[#1D4ED8] mb-2">
-                  ACTIVE INCUBATING STARTUPS
+              <div className="bg-[#FFFDF7] border-2 border-[#0F0F0F] rounded-xl p-6 pop-shadow flex flex-col justify-between">
+                <div>
+                  <div className="text-xs font-mono font-bold text-[#1D4ED8] mb-2">
+                    ACTIVE INCUBATING STARTUPS
+                  </div>
+                  <div
+                    data-testid="stat-active-startups"
+                    className="font-mono font-bold text-4xl text-[#0F0F0F] tabular-nums"
+                  >
+                    {stats.totalActiveStartups}
+                  </div>
+                  <div className="mt-2 text-xs text-neutral-600">
+                    Live in Startup Showcase
+                  </div>
                 </div>
-                <div
-                  data-testid="stat-active-startups"
-                  className="font-mono font-bold text-4xl text-[#0F0F0F] tabular-nums"
+                <button
+                  type="button"
+                  onClick={() => setActiveSection('startups')}
+                  className="mt-4 pt-3 border-t border-neutral-200 text-left text-xs font-display font-extrabold text-[#1D4ED8] hover:text-[#0F0F0F] flex items-center justify-between cursor-pointer"
                 >
-                  {stats.totalActiveStartups}
-                </div>
-                <div className="mt-2 text-xs text-neutral-600">
-                  Live in Startup Showcase
-                </div>
+                  <span>+ Add / Manage Startups</span>
+                  <span>→</span>
+                </button>
               </div>
             </div>
 
