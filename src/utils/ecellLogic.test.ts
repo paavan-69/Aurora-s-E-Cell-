@@ -464,64 +464,75 @@ test('validateLeadershipInput, validateSponsorInput, and computeReorderedDisplay
   ]);
 });
 
-test('Aurora AI constants, request validation, and structured entrepreneurship fallback work accurately', async () => {
+test('deduplicateUserRegistrations and filterUsers handle multi-criteria searches and duplicate records', async () => {
   const logicModule = await import('./ecellLogic');
 
-  assert.equal(logicModule.AURORA_AI_HEADING, 'MEET AURORA AI');
-  assert.equal(logicModule.AURORA_AI_TAGLINE, "Ideas are everywhere. Let's build yours.");
-  assert.equal(
-    logicModule.AURORA_AI_WELCOME_MESSAGE,
-    'Hey, future founder. What are we building today?'
-  );
-  assert.equal(
-    logicModule.AURORA_AI_INPUT_PLACEHOLDER,
-    'Ask Aurora AI anything about entrepreneurship...'
-  );
-  assert.deepEqual(Array.from(logicModule.AURORA_AI_SUGGESTED_PROMPTS), [
-    'Generate a startup idea',
-    'Solve a real-world problem',
-    'Help me build a startup',
-    'Create a business model',
-    'Prepare me for NEC',
-    'Explore an innovative solution',
+  const testUsers: import('./ecellLogic').UserProfileRecord[] = [
+    {
+      uid: 'user_1',
+      fullName: 'Aarav Sharma',
+      email: 'aarav@aurora.edu',
+      role: 'student',
+      accountStatus: 'active',
+      registrationDate: '2025-01-15',
+      registrationTime: '10:00:00 AM',
+    },
+    {
+      uid: 'user_1', // duplicate UID
+      fullName: 'Aarav Sharma Copy',
+      email: 'AARAV@AURORA.EDU',
+      role: 'student',
+      accountStatus: 'active',
+      registrationDate: '2025-01-15',
+      registrationTime: '10:00:00 AM',
+    },
+    {
+      uid: 'user_2',
+      fullName: 'Diya Patel',
+      email: 'diya@aurora.edu',
+      role: 'student',
+      accountStatus: 'suspended',
+      registrationDate: '2025-01-16',
+      registrationTime: '11:30:00 AM',
+    },
+    {
+      uid: 'admin_1',
+      fullName: 'Aurora Administrator',
+      email: 'adminecell@gmail.com',
+      role: 'admin',
+      accountStatus: 'active',
+      registrationDate: '2025-01-10',
+      registrationTime: '09:00:00 AM',
+    },
+  ];
+
+  const deduped = logicModule.deduplicateUserRegistrations(testUsers);
+  assert.equal(deduped.length, 3);
+  assert.equal(deduped[0].fullName, 'Aarav Sharma');
+
+  const adminOnly = logicModule.filterUsers(testUsers, '', 'admin', 'all');
+  assert.equal(adminOnly.length, 1);
+  assert.equal(adminOnly[0].email, 'adminecell@gmail.com');
+
+  const suspendedOnly = logicModule.filterUsers(testUsers, '', 'all', 'suspended');
+  assert.equal(suspendedOnly.length, 1);
+  assert.equal(suspendedOnly[0].fullName, 'Diya Patel');
+
+  const searchDiya = logicModule.filterUsers(testUsers, 'diya', 'all', 'all');
+  assert.equal(searchDiya.length, 1);
+  assert.equal(searchDiya[0].uid, 'user_2');
+
+  const sheetRows = logicModule.formatUserRegistrationSheetRows(testUsers);
+  assert.equal(sheetRows.length, 3);
+  assert.deepEqual(sheetRows[0], [
+    'user_1',
+    'Aarav Sharma',
+    'aarav@aurora.edu',
+    '2025-01-15',
+    '10:00:00 AM',
+    'active',
   ]);
-
-  const emptyReq = logicModule.validateAuroraAiRequest({ message: '   ' });
-  assert.equal(emptyReq.valid, false);
-  assert.ok(emptyReq.error);
-
-  const validReq = logicModule.validateAuroraAiRequest({
-    message: 'Generate a startup idea',
-    history: [
-      { role: 'user', text: 'Hi Aurora AI' },
-      { role: 'model', text: 'Hey, future founder. What are we building today?' },
-    ],
-  });
-  assert.equal(validReq.valid, true);
-  assert.equal(validReq.sanitizedMessage, 'Generate a startup idea');
-  assert.equal(validReq.sanitizedHistory.length, 2);
-
-  const helloResponse = logicModule.buildAuroraAiStructuredFallback('Hello');
-  assert.equal(helloResponse, 'Hey! 👋 How can I help you today?');
-  assert.equal(helloResponse.includes('Venture Execution Roadmap'), false);
-
-  const hiResponse = logicModule.buildAuroraAiStructuredFallback('Hi');
-  assert.equal(hiResponse, 'Hi there! What can I do for you?');
-
-  const jokeResponse = logicModule.buildAuroraAiStructuredFallback('Tell me a joke.');
-  assert.equal(jokeResponse.includes('Venture Execution Roadmap'), false);
-  assert.equal(jokeResponse.toLowerCase().includes('bug'), true);
-
-  const startupIdeaIntro = logicModule.buildAuroraAiStructuredFallback('I have a startup idea.');
-  assert.equal(startupIdeaIntro.includes('Tell me a bit about your idea'), true);
-  assert.equal(startupIdeaIntro.includes('Venture Execution Roadmap'), false);
-
-  const necResponse = logicModule.buildAuroraAiStructuredFallback('Prepare me for NEC');
-  assert.equal(necResponse.includes('NEC Preparation & Execution Strategy'), true);
-  assert.equal(necResponse.includes('Immediate Next Step'), true);
-
-  const ideaResponse = logicModule.buildAuroraAiStructuredFallback('Generate a startup idea');
-  assert.equal(ideaResponse.includes('3 High-Conviction Student Startup Opportunities'), true);
 });
+
 
 

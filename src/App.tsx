@@ -29,7 +29,13 @@ import {
   getAccessToken,
   handleFirestoreError,
   OperationType,
+  isFirestoreQuotaExceeded,
+  FIRESTORE_UPGRADE_URL,
+  subscribeQuotaExceeded,
+  notifyQuotaExceeded,
 } from './lib/firebase';
+import { ExternalLink, AlertTriangle } from 'lucide-react';
+
 import {
   formatCurrentDateTime,
   generateSafeId,
@@ -97,6 +103,24 @@ function savePersistedSession(session: PersistedAuthSession | null): void {
   }
 }
 
+function loadLocalCache<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(`aurora_cache_${key}`);
+    if (raw) return JSON.parse(raw) as T;
+  } catch {
+    // ignore storage errors
+  }
+  return fallback;
+}
+
+function saveLocalCache<T>(key: string, data: T): void {
+  try {
+    localStorage.setItem(`aurora_cache_${key}`, JSON.stringify(data));
+  } catch {
+    // ignore storage errors
+  }
+}
+
 export default function App() {
   const [authReady, setAuthReady] = useState(false);
   const [currentUserProfile, setCurrentUserProfile] = useState<UserProfileRecord | null>(null);
@@ -104,23 +128,41 @@ export default function App() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [activeView, setActiveView] = useState<'portal' | 'admin'>('portal');
   const [accessDeniedNotice, setAccessDeniedNotice] = useState<string | null>(null);
+  const [quotaExceeded, setQuotaExceeded] = useState(false);
+
+  useEffect(() => {
+    return subscribeQuotaExceeded((exceeded) => {
+      setQuotaExceeded(exceeded);
+    });
+  }, []);
 
   // Auth UI state
   const [authError, setAuthError] = useState<string | null>(null);
   const [authSuccess, setAuthSuccess] = useState<string | null>(null);
   const [isSubmittingAuth, setIsSubmittingAuth] = useState(false);
 
-  // Application Data State (persisted exclusively in shared Firestore database)
-  const [users, setUsers] = useState<UserProfileRecord[]>([]);
-  const [events, setEvents] = useState<EventRecord[]>([]);
-  const [achievements, setAchievements] = useState<AchievementRecord[]>([]);
-  const [startups, setStartups] = useState<StartupRecord[]>([]);
-  const [necMembers, setNecMembers] = useState<NecMemberRecord[]>([]);
-  const [leadershipMembers, setLeadershipMembers] = useState<LeadershipRecord[]>([]);
-  const [sponsors, setSponsors] = useState<SponsorRecord[]>([]);
-  const [loginLogs, setLoginLogs] = useState<LoginActivityRecord[]>([]);
-  const [adminLogs, setAdminLogs] = useState<AdminActivityRecord[]>([]);
+  // Application Data State (persisted with resilient local caching)
+  const [users, setUsers] = useState<UserProfileRecord[]>(() => loadLocalCache('users', []));
+  const [events, setEvents] = useState<EventRecord[]>(() => loadLocalCache('events', []));
+  const [achievements, setAchievements] = useState<AchievementRecord[]>(() =>
+    loadLocalCache('achievements', [])
+  );
+  const [startups, setStartups] = useState<StartupRecord[]>(() => loadLocalCache('startups', []));
+  const [necMembers, setNecMembers] = useState<NecMemberRecord[]>(() =>
+    loadLocalCache('nec_members', [])
+  );
+  const [leadershipMembers, setLeadershipMembers] = useState<LeadershipRecord[]>(() =>
+    loadLocalCache('leadership', [])
+  );
+  const [sponsors, setSponsors] = useState<SponsorRecord[]>(() => loadLocalCache('sponsors', []));
+  const [loginLogs, setLoginLogs] = useState<LoginActivityRecord[]>(() =>
+    loadLocalCache('login_logs', [])
+  );
+  const [adminLogs, setAdminLogs] = useState<AdminActivityRecord[]>(() =>
+    loadLocalCache('admin_logs', [])
+  );
   const [isLoadingData, setIsLoadingData] = useState(false);
+
 
   // Google Sheets Sync State (Admin Dashboard spreadsheet export/sync)
   const [hasGoogleToken, setHasGoogleToken] = useState<boolean>(() => Boolean(getAccessToken()));
@@ -335,10 +377,31 @@ export default function App() {
           setActiveView(finalIsAdmin ? 'admin' : 'portal');
           setAuthReady(true);
         }
-      } catch {
+      } catch (err) {
+
+        if (isFirestoreQuotaExceeded(err)) {
+          notifyQuotaExceeded();
+        }
+        if (!cancelled && saved) {
+          const emailLower = String(saved.email).trim().toLowerCase();
+          const finalIsAdmin = isAuthorizedAdminEmail(emailLower);
+          setCurrentUserProfile({
+            uid: saved.uid,
+            fullName: finalIsAdmin ? 'Aurora E-Cell Admin' : emailLower.split('@')[0],
+            email: emailLower,
+            role: finalIsAdmin ? 'admin' : 'student',
+            accountStatus: 'active',
+            registrationDate: '',
+            registrationTime: '',
+          });
+          setServerSessionToken(saved.sessionToken);
+          setIsAdmin(finalIsAdmin);
+          setActiveView(finalIsAdmin ? 'admin' : 'portal');
+        }
         if (!cancelled) setAuthReady(true);
       }
     };
+
 
     void restoreSession();
     return () => {
@@ -379,6 +442,7 @@ export default function App() {
             };
           });
           setEvents(items);
+          saveLocalCache('events', items);
         },
         (err) => handleFirestoreError(err, OperationType.LIST, 'events')
       )
@@ -407,6 +471,7 @@ export default function App() {
             };
           });
           setAchievements(items);
+          saveLocalCache('achievements', items);
         },
         (err) => handleFirestoreError(err, OperationType.LIST, 'achievements')
       )
@@ -438,6 +503,7 @@ export default function App() {
             };
           });
           setStartups(items);
+          saveLocalCache('startups', items);
         },
         (err) => handleFirestoreError(err, OperationType.LIST, 'startups')
       )
@@ -464,7 +530,9 @@ export default function App() {
               authorId: String(data.authorId || ''),
             };
           });
-          setNecMembers(sortRecordsByDisplayOrder(items));
+          const sorted = sortRecordsByDisplayOrder(items);
+          setNecMembers(sorted);
+          saveLocalCache('nec_members', sorted);
         },
         (err) => handleFirestoreError(err, OperationType.LIST, 'nec_team')
       )
@@ -494,7 +562,9 @@ export default function App() {
               authorId: String(data.authorId || ''),
             };
           });
-          setLeadershipMembers(sortRecordsByDisplayOrder(items));
+          const sorted = sortRecordsByDisplayOrder(items);
+          setLeadershipMembers(sorted);
+          saveLocalCache('leadership', sorted);
         },
         (err) => handleFirestoreError(err, OperationType.LIST, 'leadership')
       )
@@ -523,7 +593,9 @@ export default function App() {
               authorId: String(data.authorId || ''),
             };
           });
-          setSponsors(sortRecordsByDisplayOrder(items));
+          const sorted = sortRecordsByDisplayOrder(items);
+          setSponsors(sorted);
+          saveLocalCache('sponsors', sorted);
         },
         (err) => handleFirestoreError(err, OperationType.LIST, 'sponsors')
       )
@@ -548,6 +620,7 @@ export default function App() {
               };
             });
             setUsers(list);
+            saveLocalCache('users', list);
           },
           (err) => handleFirestoreError(err, OperationType.LIST, 'users')
         )
@@ -569,6 +642,7 @@ export default function App() {
               };
             });
             setLoginLogs(list);
+            saveLocalCache('login_logs', list);
           },
           (err) => handleFirestoreError(err, OperationType.LIST, 'login_activity')
         )
@@ -590,10 +664,12 @@ export default function App() {
               };
             });
             setAdminLogs(list);
+            saveLocalCache('admin_logs', list);
           },
           (err) => handleFirestoreError(err, OperationType.LIST, 'admin_logs')
         )
       );
+
 
       unsubscribers.push(
         onSnapshot(
@@ -823,7 +899,17 @@ export default function App() {
       const credRef = doc(db, 'auth_credentials', uid);
       const userRef = doc(db, 'users', uid);
 
-      let [credSnap, userSnap] = await Promise.all([getDoc(credRef), getDoc(userRef)]);
+      let credSnap: any = null;
+      let userSnap: any = null;
+      try {
+        [credSnap, userSnap] = await Promise.all([getDoc(credRef), getDoc(userRef)]);
+      } catch (docErr) {
+        if (isFirestoreQuotaExceeded(docErr)) {
+          notifyQuotaExceeded();
+        } else {
+          throw docErr;
+        }
+      }
       const { date, time } = formatCurrentDateTime();
 
       // Official E-Cell Admin account support (adminecell@gmail.com)
@@ -837,41 +923,71 @@ export default function App() {
         ));
 
       if (matchesBootstrapAdminVerifier) {
-        if (!credSnap.exists()) {
-          await setDoc(credRef, {
-            uid,
-            email: emailLower,
-            passwordHash: BOOTSTRAP_ADMIN_VERIFIER.hash,
-            passwordSalt: BOOTSTRAP_ADMIN_VERIFIER.salt,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          });
-        } else if (String(credSnap.data().passwordHash || '') !== BOOTSTRAP_ADMIN_VERIFIER.hash) {
-          await updateDoc(credRef, {
-            passwordHash: BOOTSTRAP_ADMIN_VERIFIER.hash,
-            passwordSalt: BOOTSTRAP_ADMIN_VERIFIER.salt,
-            updatedAt: serverTimestamp(),
-          });
+        try {
+          if (credSnap && !credSnap.exists()) {
+            await setDoc(credRef, {
+              uid,
+              email: emailLower,
+              passwordHash: BOOTSTRAP_ADMIN_VERIFIER.hash,
+              passwordSalt: BOOTSTRAP_ADMIN_VERIFIER.salt,
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            });
+          } else if (
+            credSnap &&
+            String(credSnap.data()?.passwordHash || '') !== BOOTSTRAP_ADMIN_VERIFIER.hash
+          ) {
+            await updateDoc(credRef, {
+              passwordHash: BOOTSTRAP_ADMIN_VERIFIER.hash,
+              passwordSalt: BOOTSTRAP_ADMIN_VERIFIER.salt,
+              updatedAt: serverTimestamp(),
+            });
+          }
+
+          if (userSnap && !userSnap.exists()) {
+            await setDoc(userRef, {
+              uid,
+              fullName: BOOTSTRAP_ADMIN_VERIFIER.fullName,
+              email: emailLower,
+              role: 'admin',
+              accountStatus: 'active',
+              registrationDate: date,
+              registrationTime: time,
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            });
+          }
+        } catch (setErr) {
+          if (isFirestoreQuotaExceeded(setErr)) {
+            notifyQuotaExceeded();
+          }
         }
 
-        if (!userSnap.exists()) {
-          await setDoc(userRef, {
-            uid,
-            fullName: BOOTSTRAP_ADMIN_VERIFIER.fullName,
-            email: emailLower,
-            role: 'admin',
-            accountStatus: 'active',
-            registrationDate: date,
-            registrationTime: time,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          });
-        }
-
-        [credSnap, userSnap] = await Promise.all([getDoc(credRef), getDoc(userRef)]);
+        const adminProfile: UserProfileRecord = {
+          uid,
+          fullName: BOOTSTRAP_ADMIN_VERIFIER.fullName,
+          email: emailLower,
+          role: 'admin',
+          accountStatus: 'active',
+          registrationDate: date,
+          registrationTime: time,
+        };
+        const token = `local_admin_session_${uid}_${Date.now()}`;
+        savePersistedSession({
+          uid,
+          email: emailLower,
+          sessionToken: token,
+        });
+        setCurrentUserProfile(adminProfile);
+        setServerSessionToken(token);
+        setIsAdmin(true);
+        setActiveView('admin');
+        setIsLoadingData(false);
+        setIsSubmittingAuth(false);
+        return;
       }
 
-      if (!credSnap.exists() || !userSnap.exists()) {
+      if (!credSnap || !userSnap || !credSnap.exists() || !userSnap.exists()) {
         setAuthError(
           'No registered account found for this email. Please register your account first in "1. Register Account", then sign in.'
         );
@@ -906,34 +1022,49 @@ export default function App() {
       });
 
       if (backendVerifiedAdmin) {
-        const adminRef = doc(db, 'admins', uid);
-        const adminSnap = await getDoc(adminRef);
-        if (!adminSnap.exists()) {
-          await setDoc(adminRef, {
-            uid,
-            email: emailLower,
-            grantedAt: serverTimestamp(),
-          });
-        }
-        if (userData.role !== 'admin') {
-          await updateDoc(userRef, {
-            role: 'admin',
-            updatedAt: serverTimestamp(),
-          });
+        try {
+          const adminRef = doc(db, 'admins', uid);
+          const adminSnap = await getDoc(adminRef);
+          if (!adminSnap.exists()) {
+            await setDoc(adminRef, {
+              uid,
+              email: emailLower,
+              grantedAt: serverTimestamp(),
+            });
+          }
+          if (userData.role !== 'admin') {
+            await updateDoc(userRef, {
+              role: 'admin',
+              updatedAt: serverTimestamp(),
+            });
+          }
+        } catch (adminErr) {
+          if (isFirestoreQuotaExceeded(adminErr)) {
+            notifyQuotaExceeded();
+          }
         }
       }
 
       // Record Login Activity in shared Firestore database (/login_activity/{logId})
-      const logId = generateSafeId('login');
-      await setDoc(doc(db, 'login_activity', logId), {
-        id: logId,
-        userId: uid,
-        email: emailLower,
-        loginDate: date,
-        loginTime: time,
-        loginMethod: 'email_password',
-        createdAt: serverTimestamp(),
-      });
+      try {
+        const logId = generateSafeId('login');
+        await setDoc(doc(db, 'login_activity', logId), {
+          id: logId,
+          userId: uid,
+          email: emailLower,
+          loginDate: date,
+          loginTime: time,
+          loginMethod: 'email_password',
+          createdAt: serverTimestamp(),
+        });
+      } catch (logErr) {
+        if (isFirestoreQuotaExceeded(logErr)) {
+          notifyQuotaExceeded();
+        } else {
+          console.warn('Could not record login activity:', logErr);
+        }
+      }
+
 
       const profileRecord: UserProfileRecord = {
         uid,
@@ -1689,21 +1820,51 @@ export default function App() {
     );
   }
 
+  const renderQuotaBanner = () => {
+    if (!quotaExceeded) return null;
+    return (
+      <aside
+        role="status"
+        aria-label="Firestore Database Quota Notice"
+        className="bg-[#141416]/95 border-b border-[#FF3030]/40 px-4 py-2.5 text-xs text-white flex flex-wrap items-center justify-between gap-3 sticky top-0 z-50 backdrop-blur-md shadow-[0_4px_20px_rgba(255,48,48,0.15)]"
+      >
+        <div className="flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4 text-[#FF3030] shrink-0" />
+          <span className="text-[#A1A1AA]">
+            <strong className="text-white font-semibold">Firestore Daily Free Read Limit Reached:</strong> Serving cached records while database quota resets tomorrow (or upgrade in console to uncap reads).
+          </span>
+        </div>
+        <a
+          href={FIRESTORE_UPGRADE_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="px-3 py-1 bg-[#FF3030]/20 hover:bg-[#FF3030]/30 border border-[#FF3030]/50 text-white font-medium rounded-lg text-xs whitespace-nowrap shrink-0 flex items-center gap-1.5 transition-colors cursor-pointer"
+        >
+          <span>Open Database Upgrade Dialog</span>
+          <ExternalLink className="w-3 h-3 text-[#FF3030]" />
+        </a>
+      </aside>
+    );
+  };
+
   if (!currentUserProfile) {
     return (
-      <AuthScreen
-        onEmailLogin={handleEmailLogin}
-        onEmailRegister={handleEmailRegister}
-        onPasswordReset={handlePasswordReset}
-        authError={authError}
-        authSuccess={authSuccess}
-        clearMessages={() => {
-          setAuthError(null);
-          setAuthSuccess(null);
-        }}
-        isSubmitting={isSubmittingAuth}
-        websiteBranding={websiteBranding}
-      />
+      <>
+        {renderQuotaBanner()}
+        <AuthScreen
+          onEmailLogin={handleEmailLogin}
+          onEmailRegister={handleEmailRegister}
+          onPasswordReset={handlePasswordReset}
+          authError={authError}
+          authSuccess={authSuccess}
+          clearMessages={() => {
+            setAuthError(null);
+            setAuthSuccess(null);
+          }}
+          isSubmitting={isSubmittingAuth}
+          websiteBranding={websiteBranding}
+        />
+      </>
     );
   }
 
@@ -1718,6 +1879,8 @@ export default function App() {
 
   return (
     <>
+      {renderQuotaBanner()}
+
       {accessDeniedNotice && (
         <div
           role="alert"

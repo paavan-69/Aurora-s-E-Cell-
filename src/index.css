@@ -133,7 +133,7 @@
 }
 
 /* Glossy Glass Finish for Embedded Panels, Surface Cards, Modals & Containers */
-[data-testid="aurora-ai-experience"],
+[data-testid="aurora-nexus-core"],
 .bg-\[\#141416\],
 .bg-\[\#0B0B0D\] {
   background-image: linear-gradient(

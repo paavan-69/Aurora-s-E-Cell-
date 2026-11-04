@@ -97,12 +97,47 @@ export {
   type User,
 };
 
+export function isFirestoreQuotaExceeded(error: unknown): boolean {
+  if (!error) return false;
+  const msg = error instanceof Error ? error.message : String(error);
+  return (
+    msg.includes('Quota limit exceeded') ||
+    msg.includes('Quota exceeded') ||
+    msg.includes('Free daily read units') ||
+    msg.includes('RESOURCE_EXHAUSTED') ||
+    msg.includes('quota metric') ||
+    msg.includes('daily read units') ||
+    msg.includes('exceed free quota limits')
+  );
+}
+
+export const FIRESTORE_UPGRADE_URL =
+  'https://console.firebase.google.com/project/gen-lang-client-0065870054/firestore/databases/ai-studio-auroraecelloffic-6f9bb33f-0088-42ff-ab3b-87d7783f44e2/data?openUpgradeDialog=true';
+
+type QuotaListener = (exceeded: boolean) => void;
+const quotaListeners = new Set<QuotaListener>();
+
+export function subscribeQuotaExceeded(listener: QuotaListener): () => void {
+  quotaListeners.add(listener);
+  return () => quotaListeners.delete(listener);
+}
+
+export function notifyQuotaExceeded(): void {
+  quotaListeners.forEach((fn) => fn(true));
+}
+
 // Validate connection to Firestore on boot as required by firebase-integration-rpc
 async function testConnection() {
   try {
     await getDocFromServer(doc(db, 'test', 'connection'));
   } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
+    if (isFirestoreQuotaExceeded(error)) {
+      notifyQuotaExceeded();
+      console.warn(
+        'Firestore free daily read units limit reached. Fallback cache enabled. Upgrade via:',
+        FIRESTORE_UPGRADE_URL
+      );
+    } else if (error instanceof Error && error.message.includes('the client is offline')) {
       console.error('Please check your Firebase configuration.');
     }
   }
@@ -139,7 +174,15 @@ export function handleFirestoreError(
   error: unknown,
   operationType: OperationType,
   path: string | null
-): never {
+): void {
+  if (isFirestoreQuotaExceeded(error)) {
+    notifyQuotaExceeded();
+    console.warn(
+      `[Firestore Quota Exceeded] Path '${path}' read limit reached for today. Reads will resume after daily quota reset or project upgrade: ${FIRESTORE_UPGRADE_URL}`
+    );
+    return;
+  }
+
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
     authInfo: {
@@ -160,6 +203,7 @@ export function handleFirestoreError(
   console.error('Firestore Error: ', JSON.stringify(errInfo));
   throw new Error(JSON.stringify(errInfo));
 }
+
 
 /**
  * Compresses an uploaded image file via HTML5 canvas into an optimized JPEG data URL
