@@ -68,7 +68,7 @@
     },
     "AdminRole": {
       "title": "AdminRole",
-      "description": "Trusted administrator membership registry document verified by the backend.",
+      "description": "Trusted administrator membership registry document.",
       "type": "object",
       "properties": {
         "uid": {
@@ -83,19 +83,51 @@
           "maxLength": 180,
           "description": "Verified admin email."
         },
-        "serverGrantCode": {
-          "type": "string",
-          "minLength": 16,
-          "maxLength": 128,
-          "description": "Server-issued authorization token proving backend role verification."
-        },
         "grantedAt": {
           "type": "string",
           "format": "date-time",
           "description": "Server timestamp when admin role was registered."
         }
       },
-      "required": ["uid", "email", "serverGrantCode", "grantedAt"]
+      "required": ["uid", "email", "grantedAt"]
+    },
+    "AuthCredential": {
+      "title": "AuthCredential",
+      "description": "Salted PBKDF2-SHA256 password verifier for email/password registration and login.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "maxLength": 128
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "maxLength": 180
+        },
+        "passwordHash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "minLength": 64,
+          "maxLength": 64
+        },
+        "passwordSalt": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{32}$",
+          "minLength": 32,
+          "maxLength": 32
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "email", "passwordHash", "passwordSalt", "createdAt", "updatedAt"]
     },
     "EventItem": {
       "title": "EventItem",
@@ -460,6 +492,10 @@
     "/users/{userId}": {
       "schema": { "$ref": "#/entities/UserProfile" },
       "description": "User registration records and account status."
+    },
+    "/auth_credentials/{userId}": {
+      "schema": { "$ref": "#/entities/AuthCredential" },
+      "description": "Salted PBKDF2-SHA256 password verifiers (never plaintext)."
     },
     "/admins/{adminUid}": {
       "schema": { "$ref": "#/entities/AdminRole" },

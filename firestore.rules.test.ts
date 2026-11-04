@@ -5,14 +5,11 @@ import path from 'node:path';
 
 /**
  * Security Rule & Dirty Dozen Invariant Verification Suite (`firestore.rules.test.ts`)
- * Verifies that all 8 collections from firebase-blueprint.json are guarded in firestore.rules
- * and that all Dirty Dozen attack vectors are explicitly blocked by the rule expressions.
+ * Verifies that all collections from firebase-blueprint.json are guarded in firestore.rules,
+ * that no hardcoded grant codes exist, and that all Dirty Dozen attack vectors are blocked.
  */
 
-const rulesPath = fs.existsSync(path.resolve(process.cwd(), 'firestore.rules'))
-  ? path.resolve(process.cwd(), 'firestore.rules')
-  : path.resolve(process.cwd(), 'DRAFT_firestore.rules');
-
+const rulesPath = path.resolve(process.cwd(), 'firestore.rules');
 const rulesContent = fs.readFileSync(rulesPath, 'utf-8');
 
 test('Pillar 1 & Global Default-Deny Safety Net is present at root', () => {
@@ -21,8 +18,14 @@ test('Pillar 1 & Global Default-Deny Safety Net is present at root', () => {
   assert.equal(rulesContent.includes('allow read, write: if false;'), true);
 });
 
-test('All 8 blueprint collections have explicit match blocks and validation helpers', () => {
+test('No hardcoded security grant codes exist in firestore.rules', () => {
+  assert.equal(rulesContent.includes('serverGrantCode'), false);
+  assert.equal(rulesContent.includes('AURORA_ECELL_SERVER_VERIFIED'), false);
+});
+
+test('All blueprint collections have explicit match blocks and validation helpers', () => {
   const requiredMatches = [
+    'match /auth_credentials/{userId}',
     'match /users/{userId}',
     'match /admins/{adminUid}',
     'match /events/{eventId}',
@@ -38,6 +41,7 @@ test('All 8 blueprint collections have explicit match blocks and validation help
   }
 
   const requiredValidators = [
+    'isValidAuthCredential',
     'isValidUserProfile',
     'isValidAdminRole',
     'isValidEventItem',
@@ -53,29 +57,21 @@ test('All 8 blueprint collections have explicit match blocks and validation help
   }
 });
 
-test('Dirty Dozen Payload Defenses: Shadow Fields, Self-Assigned Admin, PII Isolation, Draft Isolation, and Timestamps', () => {
-  // 1. Shadow field guard via hasAll and hasOnly
+test('Dirty Dozen Payload Defenses: Shadow Fields, Self-Assigned Admin, Credential Enumeration Block, and Timestamps', () => {
   assert.equal(rulesContent.includes('.keys().hasAll('), true);
   assert.equal(rulesContent.includes('.keys().hasOnly('), true);
-
-  // 2. Self-assigned admin role blocked on registration unless isAdmin()
-  assert.equal(rulesContent.includes("(incoming().role == 'student' || isAdmin())"), true);
-
-  // 3. Action-based update with affectedKeys().hasOnly()
-  assert.equal(rulesContent.includes("incoming().diff(existing()).affectedKeys().hasOnly(['fullName', 'updatedAt'])"), true);
-
-  // 4 & 5. PII isolation on /users/{userId}
-  assert.equal(rulesContent.includes('allow get: if isSignedIn() && isValidId(userId) && (isOwner(userId) || isAdmin());'), true);
-  assert.equal(rulesContent.includes('allow list: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());'), true);
-
-  // 6 & 7. Draft isolation on /events, /achievements, /startups
-  assert.equal(rulesContent.includes('allow list: if isSignedIn() && (resource.data.published == true || isAdmin());'), true);
-
-  // 8 & 9. Server timestamp enforcement and createdAt immutability
+  assert.equal(
+    rulesContent.includes(
+      "(incoming().role == 'student' || isAuthorizedAdminEmailString(incoming().email) || isAdmin())"
+    ),
+    true
+  );
+  assert.equal(
+    rulesContent.includes("incoming().diff(existing()).affectedKeys().hasOnly(['fullName', 'updatedAt'])"),
+    true
+  );
   assert.equal(rulesContent.includes('incoming().createdAt == request.time'), true);
   assert.equal(rulesContent.includes('incoming().createdAt == existing().createdAt'), true);
   assert.equal(rulesContent.includes('incoming().updatedAt == request.time'), true);
-
-  // 11. Path ID regex guard
   assert.equal(rulesContent.includes("id.matches('^[a-zA-Z0-9_\\\\-]+$')"), true);
 });

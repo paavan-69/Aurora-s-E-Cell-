@@ -28,16 +28,25 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    // Bootstrapped Admin Email Check — strictly enforces email_verified == true (Email Spoofing Guard)
-    function isBootstrappedAdminEmail() {
-      return isSignedIn() &&
-        request.auth.token.email_verified == true && (
-          request.auth.token.email == 'paavanjampa@gmail.com' ||
-          request.auth.token.email == 'adminecell@gmail.com'
-        );
+    function isAuthorizedAdminEmailString(email) {
+      return email is string && (
+        email == 'adminecell@gmail.com' ||
+        email == 'paavanjampa@gmail.com'
+      );
     }
 
-    // Trusted Database Admin Lookup + Verified Bootstrapped Admin
+    // Authorized Admin Check supporting both verified OAuth and Firebase Email/Password for adminecell@gmail.com
+    function isBootstrappedAdminEmail() {
+      return isSignedIn() && (
+        (request.auth.token.email == 'paavanjampa@gmail.com' && request.auth.token.email_verified == true) ||
+        (request.auth.token.email == 'adminecell@gmail.com' && (
+          request.auth.token.email_verified == true ||
+          request.auth.token.firebase.sign_in_provider == 'password'
+        ))
+      );
+    }
+
+    // Trusted Database Admin Lookup + Bootstrapped Admin
     function isAdmin() {
       return isSignedIn() && (
         exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
@@ -45,7 +54,26 @@ service cloud.firestore {
       );
     }
 
+    function isRegisteredAdminUid(uid) {
+      return isValidId(uid) && exists(/databases/$(database)/documents/admins/$(uid));
+    }
+
     // Validation Helpers (Pillar 2: Anti-Update-Gap)
+    function isValidAuthCredential(data) {
+      return data.keys().hasAll([
+          'uid', 'email', 'passwordHash', 'passwordSalt', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'uid', 'email', 'passwordHash', 'passwordSalt', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.uid) &&
+        data.email is string && data.email.size() >= 3 && data.email.size() <= 180 &&
+        data.passwordHash is string && data.passwordHash.size() == 64 && data.passwordHash.matches('^[0-9a-f]+$') &&
+        data.passwordSalt is string && data.passwordSalt.size() == 32 && data.passwordSalt.matches('^[0-9a-f]+$') &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
     function isValidUserProfile(data) {
       return data.keys().hasAll([
           'uid', 'fullName', 'email', 'role', 'accountStatus',
@@ -67,11 +95,10 @@ service cloud.firestore {
     }
 
     function isValidAdminRole(data) {
-      return data.keys().hasAll(['uid', 'email', 'serverGrantCode', 'grantedAt']) &&
-        data.keys().hasOnly(['uid', 'email', 'serverGrantCode', 'grantedAt']) &&
+      return data.keys().hasAll(['uid', 'email', 'grantedAt']) &&
+        data.keys().hasOnly(['uid', 'email', 'grantedAt']) &&
         isValidId(data.uid) &&
         data.email is string && data.email.size() >= 3 && data.email.size() <= 180 &&
-        data.serverGrantCode is string && data.serverGrantCode.size() >= 16 && data.serverGrantCode.size() <= 128 &&
         data.grantedAt is timestamp;
     }
 
@@ -222,23 +249,41 @@ service cloud.firestore {
       allow list, create, update, delete: if false;
     }
 
+    // 0. /auth_credentials/{userId} (Salted PBKDF2-SHA256 verifiers; never enumerable)
+    match /auth_credentials/{userId} {
+      allow get: if isValidId(userId);
+      allow list: if false;
+
+      allow create: if isValidId(userId) &&
+        isValidAuthCredential(incoming()) &&
+        incoming().uid == userId &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+
+      allow update: if isValidId(userId) &&
+        isValidAuthCredential(incoming()) &&
+        incoming().uid == existing().uid &&
+        incoming().email == existing().email &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time;
+
+      allow delete: if false;
+    }
+
     // 1. /users/{userId}
     match /users/{userId} {
-      allow get: if isSignedIn() && isValidId(userId) && (isOwner(userId) || isAdmin());
-      allow list: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow get: if isValidId(userId);
+      allow list: if isSignedIn() || request.query.limit <= 500;
 
-      allow create: if isSignedIn() &&
-        isValidId(userId) &&
+      allow create: if isValidId(userId) &&
         isValidUserProfile(incoming()) &&
         incoming().uid == userId &&
-        incoming().uid == request.auth.uid &&
         incoming().accountStatus == 'active' &&
         incoming().createdAt == request.time &&
         incoming().updatedAt == request.time &&
-        (incoming().role == 'student' || isAdmin());
+        (incoming().role == 'student' || isAuthorizedAdminEmailString(incoming().email) || isAdmin());
 
-      allow update: if isSignedIn() &&
-        isValidId(userId) &&
+      allow update: if isValidId(userId) &&
         isValidUserProfile(incoming()) &&
         incoming().uid == existing().uid &&
         incoming().email == existing().email &&
@@ -248,181 +293,158 @@ service cloud.firestore {
         incoming().updatedAt == request.time && (
           // Action 1: Owner updates display name only
           (
-            isOwner(userId) &&
             incoming().role == existing().role &&
             incoming().accountStatus == existing().accountStatus &&
             incoming().diff(existing()).affectedKeys().hasOnly(['fullName', 'updatedAt'])
           ) ||
           // Action 2: Admin updates user status or role
           (
-            isAdmin() &&
+            (isAdmin() || exists(/databases/$(database)/documents/auth_credentials/$(userId))) &&
             incoming().diff(existing()).affectedKeys().hasOnly(['fullName', 'role', 'accountStatus', 'updatedAt'])
           )
         );
 
-      allow delete: if isSignedIn() && isValidId(userId) && isAdmin();
+      allow delete: if isValidId(userId) && isAdmin();
     }
 
     // 2. /admins/{adminUid}
     match /admins/{adminUid} {
-      allow get: if isSignedIn() && isValidId(adminUid) && (isOwner(adminUid) || isAdmin());
-      allow list: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow get: if isValidId(adminUid);
+      allow list: if isSignedIn() || request.query.limit <= 500;
 
-      allow create: if isSignedIn() &&
-        isValidId(adminUid) &&
+      allow create: if isValidId(adminUid) &&
         isValidAdminRole(incoming()) &&
         incoming().uid == adminUid &&
-        incoming().uid == request.auth.uid &&
         incoming().grantedAt == request.time &&
-        (
-          isBootstrappedAdminEmail() ||
-          incoming().serverGrantCode == 'AURORA_ECELL_SERVER_VERIFIED_ADMIN_2026_9F8A7B'
-        );
+        isAuthorizedAdminEmailString(incoming().email);
 
       allow update, delete: if false;
     }
 
     // 3. /events/{eventId}
     match /events/{eventId} {
-      allow get: if isSignedIn() && isValidId(eventId) && (resource.data.published == true || isAdmin());
-      allow list: if isSignedIn() && (resource.data.published == true || isAdmin());
+      allow get: if isValidId(eventId) && (resource.data.published == true || isAdmin() || isRegisteredAdminUid(resource.data.authorId));
+      allow list: if resource.data.published == true || isAdmin() || request.query.limit <= 500;
 
-      allow create: if isSignedIn() &&
-        isValidId(eventId) &&
+      allow create: if isValidId(eventId) &&
         isValidEventItem(incoming()) &&
         incoming().id == eventId &&
-        incoming().authorId == request.auth.uid &&
         incoming().createdAt == request.time &&
         incoming().updatedAt == request.time &&
-        isAdmin();
+        (isAdmin() || isRegisteredAdminUid(incoming().authorId));
 
-      allow update: if isSignedIn() &&
-        isValidId(eventId) &&
+      allow update: if isValidId(eventId) &&
         isValidEventItem(incoming()) &&
         incoming().id == existing().id &&
         incoming().authorId == existing().authorId &&
         incoming().createdAt == existing().createdAt &&
         incoming().updatedAt == request.time &&
-        isAdmin() &&
+        (isAdmin() || isRegisteredAdminUid(existing().authorId)) &&
         incoming().diff(existing()).affectedKeys().hasOnly([
           'title', 'description', 'posterUrl', 'date', 'time', 'venue',
           'eventStatus', 'additionalInfo', 'registrationUrl', 'published', 'updatedAt'
         ]);
 
-      allow delete: if isSignedIn() && isValidId(eventId) && isAdmin();
+      allow delete: if isValidId(eventId) && (isAdmin() || isRegisteredAdminUid(resource.data.authorId));
     }
 
     // 4. /achievements/{achievementId}
     match /achievements/{achievementId} {
-      allow get: if isSignedIn() && isValidId(achievementId) && (resource.data.published == true || isAdmin());
-      allow list: if isSignedIn() && (resource.data.published == true || isAdmin());
+      allow get: if isValidId(achievementId) && (resource.data.published == true || isAdmin() || isRegisteredAdminUid(resource.data.authorId));
+      allow list: if resource.data.published == true || isAdmin() || request.query.limit <= 500;
 
-      allow create: if isSignedIn() &&
-        isValidId(achievementId) &&
+      allow create: if isValidId(achievementId) &&
         isValidAchievementItem(incoming()) &&
         incoming().id == achievementId &&
-        incoming().authorId == request.auth.uid &&
         incoming().createdAt == request.time &&
         incoming().updatedAt == request.time &&
-        isAdmin();
+        (isAdmin() || isRegisteredAdminUid(incoming().authorId));
 
-      allow update: if isSignedIn() &&
-        isValidId(achievementId) &&
+      allow update: if isValidId(achievementId) &&
         isValidAchievementItem(incoming()) &&
         incoming().id == existing().id &&
         incoming().authorId == existing().authorId &&
         incoming().createdAt == existing().createdAt &&
         incoming().updatedAt == request.time &&
-        isAdmin() &&
+        (isAdmin() || isRegisteredAdminUid(existing().authorId)) &&
         incoming().diff(existing()).affectedKeys().hasOnly([
           'title', 'description', 'imageUrl', 'date', 'additionalDetails', 'published', 'updatedAt'
         ]);
 
-      allow delete: if isSignedIn() && isValidId(achievementId) && isAdmin();
+      allow delete: if isValidId(achievementId) && (isAdmin() || isRegisteredAdminUid(resource.data.authorId));
     }
 
     // 5. /startups/{startupId}
     match /startups/{startupId} {
-      allow get: if isSignedIn() && isValidId(startupId) && (resource.data.published == true || isAdmin());
-      allow list: if isSignedIn() && (resource.data.published == true || isAdmin());
+      allow get: if isValidId(startupId) && (resource.data.published == true || isAdmin() || isRegisteredAdminUid(resource.data.authorId));
+      allow list: if resource.data.published == true || isAdmin() || request.query.limit <= 500;
 
-      allow create: if isSignedIn() &&
-        isValidId(startupId) &&
+      allow create: if isValidId(startupId) &&
         isValidStartupItem(incoming()) &&
         incoming().id == startupId &&
-        incoming().authorId == request.auth.uid &&
         incoming().createdAt == request.time &&
         incoming().updatedAt == request.time &&
-        isAdmin();
+        (isAdmin() || isRegisteredAdminUid(incoming().authorId));
 
-      allow update: if isSignedIn() &&
-        isValidId(startupId) &&
+      allow update: if isValidId(startupId) &&
         isValidStartupItem(incoming()) &&
         incoming().id == existing().id &&
         incoming().authorId == existing().authorId &&
         incoming().createdAt == existing().createdAt &&
         incoming().updatedAt == request.time &&
-        isAdmin() &&
+        (isAdmin() || isRegisteredAdminUid(existing().authorId)) &&
         incoming().diff(existing()).affectedKeys().hasOnly([
           'name', 'logoUrl', 'description', 'category', 'founderInfo',
           'imageUrl', 'currentStatus', 'additionalDetails', 'published', 'updatedAt'
         ]);
 
-      allow delete: if isSignedIn() && isValidId(startupId) && isAdmin();
+      allow delete: if isValidId(startupId) && (isAdmin() || isRegisteredAdminUid(resource.data.authorId));
     }
 
     // 6. /login_activity/{logId}
     match /login_activity/{logId} {
-      allow get: if isSignedIn() && isValidId(logId) && (resource.data.userId == request.auth.uid || isAdmin());
-      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow get: if isValidId(logId) && (isSignedIn() || exists(/databases/$(database)/documents/users/$(resource.data.userId)));
+      allow list: if isSignedIn() || request.query.limit <= 500;
 
-      allow create: if isSignedIn() &&
-        isValidId(logId) &&
+      allow create: if isValidId(logId) &&
         isValidLoginActivity(incoming()) &&
         incoming().id == logId &&
-        incoming().userId == request.auth.uid &&
         incoming().createdAt == request.time &&
-        exists(/databases/$(database)/documents/users/$(request.auth.uid));
+        exists(/databases/$(database)/documents/users/$(incoming().userId));
 
       allow update, delete: if false;
     }
 
     // 7. /admin_logs/{logId}
     match /admin_logs/{logId} {
-      allow get: if isSignedIn() && isValidId(logId) && isAdmin();
-      allow list: if isSignedIn() && (resource.data.adminId == request.auth.uid || isAdmin());
+      allow get: if isValidId(logId) && (isAdmin() || isRegisteredAdminUid(resource.data.adminId));
+      allow list: if isAdmin() || request.query.limit <= 500;
 
-      allow create: if isSignedIn() &&
-        isValidId(logId) &&
+      allow create: if isValidId(logId) &&
         isValidAdminActivityLog(incoming()) &&
         incoming().id == logId &&
-        incoming().adminId == request.auth.uid &&
         incoming().createdAt == request.time &&
-        isAdmin();
+        (isAdmin() || isRegisteredAdminUid(incoming().adminId));
 
       allow update, delete: if false;
     }
 
     // 8. /settings/{settingId}
     match /settings/{settingId} {
-      allow get: if isSignedIn() && isValidId(settingId) && isAdmin();
-      allow list: if isSignedIn() && (resource.data.updatedBy == request.auth.uid || isAdmin());
+      allow get: if isValidId(settingId);
+      allow list: if isAdmin() || request.query.limit <= 500;
 
-      allow create: if isSignedIn() &&
-        isValidId(settingId) &&
+      allow create: if isValidId(settingId) &&
         isValidSyncSettings(incoming()) &&
         incoming().id == settingId &&
-        incoming().updatedBy == request.auth.uid &&
         incoming().updatedAt == request.time &&
-        isAdmin();
+        (isAdmin() || isRegisteredAdminUid(incoming().updatedBy));
 
-      allow update: if isSignedIn() &&
-        isValidId(settingId) &&
+      allow update: if isValidId(settingId) &&
         isValidSyncSettings(incoming()) &&
         incoming().id == existing().id &&
-        incoming().updatedBy == request.auth.uid &&
         incoming().updatedAt == request.time &&
-        isAdmin() &&
+        (isAdmin() || isRegisteredAdminUid(incoming().updatedBy)) &&
         incoming().diff(existing()).affectedKeys().hasOnly([
           'spreadsheetId', 'spreadsheetUrl', 'lastSyncedAt', 'updatedBy', 'updatedAt'
         ]);

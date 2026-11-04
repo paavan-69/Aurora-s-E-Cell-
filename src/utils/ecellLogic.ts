@@ -104,6 +104,18 @@ export const BLUEPRINT_LIMITS = {
 
 export const ADMIN_EMAILS = ['adminecell@gmail.com', 'paavanjampa@gmail.com'];
 
+/**
+ * Precomputed PBKDF2-SHA256 (100,000 iterations) salted verifier for the official
+ * Aurora E-Cell administrator account (adminecell@gmail.com).
+ * Plaintext password is never stored in source code or database.
+ */
+export const BOOTSTRAP_ADMIN_VERIFIER = {
+  email: 'adminecell@gmail.com',
+  fullName: 'Aurora E-Cell Admin',
+  salt: 'a1b2c3d4e5f60718293a4b5c6d7e8f90',
+  hash: 'c89ae999a70117a72408b465dcc4fc6a064e6746cb37b921dc807170bd0bbbb2',
+} as const;
+
 export function isAuthorizedAdminEmail(email: string | null | undefined): boolean {
   if (!email) return false;
   return ADMIN_EMAILS.includes(email.trim().toLowerCase());
@@ -117,6 +129,89 @@ export function generateSafeId(prefix: string): string {
   const randomPart = Math.random().toString(36).substring(2, 10);
   const timePart = Date.now().toString(36);
   return `${prefix}_${timePart}_${randomPart}`.replace(/[^a-zA-Z0-9_\-]/g, '');
+}
+
+function bytesToHex(bytes: Uint8Array): string {
+  return Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+function hexToBytes(hex: string): Uint8Array {
+  const clean = hex.trim().toLowerCase();
+  const out = new Uint8Array(clean.length / 2);
+  for (let i = 0; i < out.length; i++) {
+    out[i] = parseInt(clean.slice(i * 2, i * 2 + 2), 16);
+  }
+  return out;
+}
+
+/**
+ * Deterministically derives a Firestore-safe user ID (`usr_<32-hex-chars>`) from an email address
+ * using SHA-256 so each registered email maps to a single canonical document ID.
+ */
+export async function deriveUserIdFromEmail(email: string): Promise<string> {
+  const normalized = email.trim().toLowerCase();
+  const encoded = new TextEncoder().encode(`aurora_ecell_uid_v1:${normalized}`);
+  const digestBuffer = await globalThis.crypto.subtle.digest('SHA-256', encoded);
+  const hex = bytesToHex(new Uint8Array(digestBuffer)).slice(0, 32);
+  return `usr_${hex}`;
+}
+
+/**
+ * Generates a 16-byte (32 hex character) cryptographic salt.
+ */
+export function generatePasswordSalt(): string {
+  const saltBytes = new Uint8Array(16);
+  globalThis.crypto.getRandomValues(saltBytes);
+  return bytesToHex(saltBytes);
+}
+
+/**
+ * Derives a 64-character hex PBKDF2-SHA256 password verifier (100,000 iterations).
+ * Plaintext passwords are never stored anywhere.
+ */
+export async function hashPasswordWithSalt(password: string, saltHex: string): Promise<string> {
+  const enc = new TextEncoder();
+  const keyMaterial = await globalThis.crypto.subtle.importKey(
+    'raw',
+    enc.encode(password),
+    { name: 'PBKDF2' },
+    false,
+    ['deriveBits']
+  );
+  const saltBytes = hexToBytes(saltHex);
+  const derivedBits = await globalThis.crypto.subtle.deriveBits(
+    {
+      name: 'PBKDF2',
+      salt: saltBytes as BufferSource,
+      iterations: 100_000,
+      hash: 'SHA-256',
+    },
+    keyMaterial,
+    256
+  );
+  return bytesToHex(new Uint8Array(derivedBits));
+}
+
+/**
+ * Constant-time verification of a password against a stored salt and PBKDF2-SHA256 hash.
+ */
+export async function verifyPasswordWithSalt(
+  password: string,
+  saltHex: string,
+  expectedHashHex: string
+): Promise<boolean> {
+  if (!password || !saltHex || !expectedHashHex || expectedHashHex.length !== 64) {
+    return false;
+  }
+  const computed = await hashPasswordWithSalt(password, saltHex);
+  if (computed.length !== expectedHashHex.length) return false;
+  let diff = 0;
+  for (let i = 0; i < computed.length; i++) {
+    diff |= computed.charCodeAt(i) ^ expectedHashHex.charCodeAt(i);
+  }
+  return diff === 0;
 }
 
 export function formatCurrentDateTime(now: Date = new Date()): { date: string; time: string } {

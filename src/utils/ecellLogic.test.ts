@@ -253,3 +253,37 @@ test('deduplicateUserRegistrations and Google Sheets row formatters prevent dupl
   const filtered = filterUsers(duplicateUsers, 'vikram', 'student', 'active');
   assert.equal(filtered.length, 1);
 });
+
+test('api/index.ts exports serverless Express handler, server admin role helper, and PBKDF2 password verifiers', async () => {
+  const apiModule = await import('../../api/index');
+  const logicModule = await import('./ecellLogic');
+  assert.equal(typeof apiModule.default, 'function');
+  assert.equal(typeof apiModule.app, 'function');
+  assert.equal(apiModule.isServerAuthorizedAdmin('adminecell@gmail.com'), true);
+  assert.equal(apiModule.isServerAuthorizedAdmin('student@aurora.edu.in'), false);
+  assert.equal(Boolean(apiModule.getFirebaseApiKey()), true);
+
+  const uid1 = await logicModule.deriveUserIdFromEmail('Student@Aurora.edu.in ');
+  const uid2 = await logicModule.deriveUserIdFromEmail('student@aurora.edu.in');
+  assert.equal(uid1, uid2);
+  assert.equal(/^usr_[0-9a-f]{32}$/.test(uid1), true);
+
+  const salt = logicModule.generatePasswordSalt();
+  assert.equal(/^[0-9a-f]{32}$/.test(salt), true);
+  const hash = await logicModule.hashPasswordWithSalt('MySecretPass123!', salt);
+  assert.equal(/^[0-9a-f]{64}$/.test(hash), true);
+  assert.equal(await logicModule.verifyPasswordWithSalt('MySecretPass123!', salt, hash), true);
+  assert.equal(await logicModule.verifyPasswordWithSalt('WrongPass123!', salt, hash), false);
+
+  const token = apiModule.createSignedServerSessionToken({
+    uid: uid1,
+    email: 'student@aurora.edu.in',
+    role: 'student',
+  });
+  const verified = apiModule.verifySignedServerSessionToken(token);
+  assert.ok(verified);
+  assert.equal(verified.uid, uid1);
+  assert.equal(verified.email, 'student@aurora.edu.in');
+});
+
+

@@ -1747,7 +1747,14 @@ export function AdminDashboard({
                 onClick={async () => {
                   const action = confirmDialog.onConfirm;
                   setConfirmDialog(null);
-                  await action();
+                  try {
+                    await action();
+                  } catch (err) {
+                    showToast(
+                      'error',
+                      err instanceof Error ? err.message : 'Operation failed.'
+                    );
+                  }
                 }}
                 className="px-4 py-2 bg-[#FF5722] text-[#0F0F0F] font-display font-extrabold text-xs border-2 border-[#0F0F0F] rounded-lg pop-shadow cursor-pointer"
               >
