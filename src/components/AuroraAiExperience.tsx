@@ -20,189 +20,63 @@ const _dummyObj = new THREE.Object3D();
 const _targetColor = new THREE.Color();
 
 /**
- * Formatted markdown renderer for Aurora AI responses
- * Renders headings (#, ##, ###, ####), bullet lists, numbered lists, horizontal dividers,
- * markdown tables, code blocks, **bold**, *italic*, and `inline code` spans cleanly.
+ * Formatted markdown-lite renderer for Aurora AI responses
+ * Renders ### headings, bullet lists, and **bold** spans cleanly.
  */
 function renderFormattedAiText(rawText: string) {
   const lines = rawText.split('\n');
 
   const formatInline = (text: string) => {
-    const tokenRegex = /(\*\*[^*]+\*\*|`[^`]+`|\*[^*\s][^*]*\*)/g;
-    const parts = text.split(tokenRegex);
+    const parts = text.split(/(\*\*[^*]+\*\*)/g);
     return parts.map((part, idx) => {
-      if (part.startsWith('**') && part.endsWith('**') && part.length > 4) {
+      if (part.startsWith('**') && part.endsWith('**')) {
         return (
           <strong key={idx} className="font-semibold text-white">
             {part.slice(2, -2)}
           </strong>
         );
       }
-      if (part.startsWith('`') && part.endsWith('`') && part.length > 2) {
-        return (
-          <code
-            key={idx}
-            className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-white/10 text-[#FF6B6B] border border-white/10"
-          >
-            {part.slice(1, -1)}
-          </code>
-        );
-      }
-      if (part.startsWith('*') && part.endsWith('*') && part.length > 2) {
-        return (
-          <em key={idx} className="italic text-white/90">
-            {part.slice(1, -1)}
-          </em>
-        );
-      }
       return <React.Fragment key={idx}>{part}</React.Fragment>;
     });
   };
 
-  const elements: React.ReactNode[] = [];
-  let idx = 0;
-
-  while (idx < lines.length) {
-    const line = lines[idx];
-    const trimmed = line.trim();
-
-    if (!trimmed) {
-      elements.push(<div key={`sp-${idx}`} className="h-1" />);
-      idx++;
-      continue;
-    }
-
-    // Fenced code blocks
-    if (trimmed.startsWith('```')) {
-      const codeLines: string[] = [];
-      idx++;
-      while (idx < lines.length && !lines[idx].trim().startsWith('```')) {
-        codeLines.push(lines[idx]);
-        idx++;
-      }
-      if (idx < lines.length) idx++;
-      elements.push(
-        <pre
-          key={`code-${idx}`}
-          className="font-mono text-[11px] leading-relaxed p-2.5 rounded-lg bg-[#050505]/90 border border-white/12 text-[#E4E4E7] overflow-x-auto my-1"
-        >
-          <code>{codeLines.join('\n')}</code>
-        </pre>
-      );
-      continue;
-    }
-
-    // Markdown table blocks
-    if (trimmed.startsWith('|') && trimmed.endsWith('|') && trimmed.split('|').length > 2) {
-      const tableLines: string[] = [];
-      while (
-        idx < lines.length &&
-        lines[idx].trim().startsWith('|') &&
-        lines[idx].trim().endsWith('|')
-      ) {
-        tableLines.push(lines[idx].trim());
-        idx++;
-      }
-      const parsedRows = tableLines
-        .filter((row) => !/^\|[\s:|-]+\|$/.test(row))
-        .map((row) =>
-          row
-            .slice(1, -1)
-            .split('|')
-            .map((cell) => cell.trim())
-        );
-
-      if (parsedRows.length > 0) {
-        const [headerRow, ...bodyRows] = parsedRows;
-        elements.push(
-          <div
-            key={`tbl-${idx}`}
-            className="overflow-x-auto my-1.5 rounded-lg border border-white/12 bg-[#050505]/60"
-          >
-            <table className="w-full text-left border-collapse text-[11px]">
-              <thead>
-                <tr className="border-b border-white/12 bg-white/5 text-white font-display">
-                  {headerRow.map((cell, cIdx) => (
-                    <th key={cIdx} className="px-2.5 py-1.5 font-semibold">
-                      {formatInline(cell)}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/8">
-                {bodyRows.map((row, rIdx) => (
-                  <tr key={rIdx} className="hover:bg-white/[0.03]">
-                    {row.map((cell, cIdx) => (
-                      <td key={cIdx} className="px-2.5 py-1.5 text-[#E4E4E7]">
-                        {formatInline(cell)}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        );
-        continue;
-      }
-    }
-
-    // Horizontal rule
-    if (/^(-{3,}|\*{3,}|_{3,})$/.test(trimmed)) {
-      elements.push(<hr key={`hr-${idx}`} className="border-white/10 my-2" />);
-      idx++;
-      continue;
-    }
-
-    // Headings (#, ##, ###, ####)
-    const headingMatch = trimmed.match(/^(#{1,4})\s+(.+)$/);
-    if (headingMatch) {
-      elements.push(
-        <h4
-          key={`h-${idx}`}
-          className="font-display font-bold text-sm text-white pt-1.5 tracking-tight"
-        >
-          {formatInline(headingMatch[2])}
-        </h4>
-      );
-      idx++;
-      continue;
-    }
-
-    // Bullet lists (-, *, •)
-    if (/^[-*•]\s+/.test(trimmed)) {
-      elements.push(
-        <div key={`ul-${idx}`} className="flex items-start gap-2 pl-1">
-          <span className="text-[#FF3030] font-mono text-xs select-none mt-0.5">/</span>
-          <span className="flex-1">{formatInline(trimmed.replace(/^[-*•]\s+/, ''))}</span>
-        </div>
-      );
-      idx++;
-      continue;
-    }
-
-    // Numbered lists (1. , 2. , etc.)
-    const numMatch = trimmed.match(/^(\d+)\.\s+(.+)$/);
-    if (numMatch) {
-      elements.push(
-        <div key={`ol-${idx}`} className="flex items-start gap-2 pl-1">
-          <span className="text-[#FF3030] font-mono font-bold text-xs select-none mt-0.5">
-            {numMatch[1]}.
-          </span>
-          <span className="flex-1">{formatInline(numMatch[2])}</span>
-        </div>
-      );
-      idx++;
-      continue;
-    }
-
-    elements.push(<p key={`p-${idx}`}>{formatInline(trimmed)}</p>);
-    idx++;
-  }
-
   return (
     <div className="space-y-1.5 text-xs sm:text-[13px] leading-relaxed text-[#E4E4E7]">
-      {elements}
+      {lines.map((line, i) => {
+        const trimmed = line.trim();
+        if (!trimmed) {
+          return <div key={i} className="h-1" />;
+        }
+        if (trimmed.startsWith('### ')) {
+          return (
+            <h4
+              key={i}
+              className="font-display font-bold text-sm text-white pt-1 tracking-tight"
+            >
+              {trimmed.replace(/^###\s+/, '')}
+            </h4>
+          );
+        }
+        if (trimmed.startsWith('## ')) {
+          return (
+            <h4
+              key={i}
+              className="font-display font-bold text-sm text-white pt-1 tracking-tight"
+            >
+              {trimmed.replace(/^##\s+/, '')}
+            </h4>
+          );
+        }
+        if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+          return (
+            <div key={i} className="flex items-start gap-2 pl-1">
+              <span className="text-[#FF3030] font-mono text-xs select-none mt-0.5">/</span>
+              <span className="flex-1">{formatInline(trimmed.slice(2))}</span>
+            </div>
+          );
+        }
+        return <p key={i}>{formatInline(trimmed)}</p>;
+      })}
     </div>
   );
 }
@@ -723,51 +597,29 @@ export function AuroraAiExperience() {
     setCoreState('thinking');
 
     try {
-      let replyText = '';
+      const response = await fetch('/api/aurora-ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: trimmed,
+          history: priorHistory,
+        }),
+      });
 
-      for (let attempt = 1; attempt <= 3; attempt++) {
-        try {
-          const response = await fetch('/api/aurora-ai', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              message: trimmed,
-              history: priorHistory,
-            }),
-          });
+      const data = (await response.json()) as {
+        reply?: string;
+        error?: string;
+      };
 
-          const rawBody = await response.text();
-          let data: { reply?: string; error?: string } = {};
-          try {
-            data = JSON.parse(rawBody) as { reply?: string; error?: string };
-          } catch {
-            data = {};
-          }
-
-          if (response.ok && data.reply && data.reply.trim()) {
-            replyText = data.reply.trim();
-            break;
-          }
-
-          if (attempt < 3) {
-            await new Promise((r) => setTimeout(r, 350 * attempt));
-          }
-        } catch {
-          if (attempt < 3) {
-            await new Promise((r) => setTimeout(r, 350 * attempt));
-          }
-        }
-      }
-
-      if (!replyText) {
-        replyText = buildAuroraAiStructuredFallback(trimmed, priorHistory);
+      if (!response.ok || !data.reply) {
+        throw new Error(data.error || 'Unable to reach Aurora AI right now.');
       }
 
       setCoreState('responding');
       const aiMsg: AuroraAiChatMessage = {
         id: generateSafeId('msg_ai'),
         role: 'model',
-        text: replyText,
+        text: data.reply,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
 
@@ -775,6 +627,13 @@ export function AuroraAiExperience() {
       window.setTimeout(() => {
         setCoreState('idle');
       }, 1200);
+    } catch (err: unknown) {
+      setErrorText(
+        err instanceof Error
+          ? err.message
+          : 'Unable to reach Aurora AI right now. Please try again.'
+      );
+      setCoreState('idle');
     } finally {
       setIsLoading(false);
     }

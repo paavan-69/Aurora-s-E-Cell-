@@ -3,7 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import dotenv from 'dotenv';
-import { GoogleGenAI, ThinkingLevel } from '@google/genai';
+import { GoogleGenAI } from '@google/genai';
+import firebaseAppletConfig from '../firebase-applet-config.json';
 import {
   SHEET1_HEADERS,
   SHEET2_HEADERS,
@@ -28,7 +29,7 @@ const MASTER_SPREADSHEET_TITLE = 'AURORA E-CELL — USER DATABASE';
 /**
  * Resolves the Firebase Web API Key for server-side token verification with Google Identity Toolkit.
  * Checks environment variables first (FIREBASE_API_KEY / VITE_FIREBASE_API_KEY), then falls back
- * to reading firebase-applet-config.json from disk.
+ * to the bundled firebase-applet-config.json.
  */
 export function getFirebaseApiKey(): string {
   const envKey = (
@@ -38,6 +39,14 @@ export function getFirebaseApiKey(): string {
   ).trim();
   if (envKey) {
     return envKey;
+  }
+
+  if (
+    firebaseAppletConfig &&
+    typeof firebaseAppletConfig.apiKey === 'string' &&
+    firebaseAppletConfig.apiKey
+  ) {
+    return firebaseAppletConfig.apiKey;
   }
 
   try {
@@ -757,115 +766,83 @@ apiRouter.post('/admin/validate-nec-member', async (req: Request, res: Response)
 /**
  * POST /api/aurora-ai
  * Server-side AI Assistant endpoint powered by @google/genai.
- * Uses multi-attempt retry with ThinkingLevel.MINIMAL on gemini-3.1-flash-lite and ThinkingLevel.LOW on gemini-3.8-flash
- * so transient upstream demand spikes never cause a server error.
+ * Never exposes API keys to the browser and supports multi-turn conversational context for any question.
  */
 apiRouter.post('/aurora-ai', async (req: Request, res: Response) => {
-  try {
-    const validation = validateAuroraAiRequest({
-      message: req.body?.message,
-      history: req.body?.history,
-    });
+  const validation = validateAuroraAiRequest({
+    message: req.body?.message,
+    history: req.body?.history,
+  });
 
-    if (!validation.valid) {
-      return res.status(400).json({
-        error: validation.error || 'Invalid prompt.',
-      });
-    }
-
-    const { sanitizedMessage, sanitizedHistory } = validation;
-    const geminiApiKey = (
-      process.env.GEMINI_API_KEY ||
-      process.env.API_KEY ||
-      process.env.GOOGLE_API_KEY ||
-      ''
-    ).trim();
-
-    if (geminiApiKey) {
-      const ai = new GoogleGenAI({
-        apiKey: geminiApiKey,
-        httpOptions: {
-          headers: {
-            'User-Agent': 'aistudio-build',
-          },
-          timeout: 14000,
-        },
-      });
-
-      const contents = [
-        ...sanitizedHistory.map((turn) => ({
-          role: turn.role,
-          parts: [{ text: turn.text }],
-        })),
-        {
-          role: 'user' as const,
-          parts: [{ text: sanitizedMessage }],
-        },
-      ];
-
-      const attemptPlan: Array<{
-        model: string;
-        thinkingLevel: ThinkingLevel;
-        delayBeforeMs: number;
-      }> = [
-        { model: 'gemini-3.1-flash-lite', thinkingLevel: ThinkingLevel.MINIMAL, delayBeforeMs: 0 },
-        { model: 'gemini-3.1-flash-lite', thinkingLevel: ThinkingLevel.MINIMAL, delayBeforeMs: 250 },
-        { model: 'gemini-3.1-flash-lite', thinkingLevel: ThinkingLevel.MINIMAL, delayBeforeMs: 500 },
-        { model: 'gemini-3.8-flash', thinkingLevel: ThinkingLevel.LOW, delayBeforeMs: 300 },
-        { model: 'gemini-3.1-flash-lite', thinkingLevel: ThinkingLevel.MINIMAL, delayBeforeMs: 800 },
-      ];
-
-      for (let i = 0; i < attemptPlan.length; i++) {
-        const plan = attemptPlan[i];
-        if (plan.delayBeforeMs > 0) {
-          await new Promise((resolve) => setTimeout(resolve, plan.delayBeforeMs));
-        }
-        try {
-          const response = await ai.models.generateContent({
-            model: plan.model,
-            contents,
-            config: {
-              systemInstruction: AURORA_AI_SYSTEM_INSTRUCTION,
-              thinkingConfig: {
-                thinkingLevel: plan.thinkingLevel,
-              },
-            },
-          });
-
-          const text = (response.text ?? '').trim();
-          if (text) {
-            return res.status(200).json({
-              reply: text,
-              model: plan.model,
-            });
-          }
-        } catch (err: unknown) {
-          console.warn(
-            `Aurora AI attempt ${i + 1} (${plan.model}) transient warning:`,
-            err instanceof Error ? err.message : err
-          );
-        }
-      }
-    }
-
-    // Zero-crash guarantee: if upstream API is unreachable or unconfigured on an external host,
-    // return a 200 response rather than throwing a 500/502 server error.
-    const fallbackReply = buildAuroraAiStructuredFallback(sanitizedMessage, sanitizedHistory);
-    return res.status(200).json({
-      reply: fallbackReply,
-      model: 'aurora-resilient-engine',
-    });
-  } catch (unexpectedErr: unknown) {
-    console.error('Unexpected error in /api/aurora-ai handler:', unexpectedErr);
-    const safeMsg =
-      typeof req.body?.message === 'string' && req.body.message.trim()
-        ? req.body.message.trim()
-        : ' entrepreneurship strategy';
-    return res.status(200).json({
-      reply: buildAuroraAiStructuredFallback(safeMsg, []),
-      model: 'aurora-resilient-engine',
+  if (!validation.valid) {
+    return res.status(400).json({
+      error: validation.error || 'Invalid prompt.',
     });
   }
+
+  const { sanitizedMessage, sanitizedHistory } = validation;
+  const geminiApiKey = (process.env.GEMINI_API_KEY || '').trim();
+
+  if (!geminiApiKey) {
+    return res.status(503).json({
+      error: 'Aurora AI service is initializing. Please check your GEMINI_API_KEY configuration.',
+    });
+  }
+
+  const ai = new GoogleGenAI({
+    apiKey: geminiApiKey,
+    httpOptions: {
+      headers: {
+        'User-Agent': 'aistudio-build',
+      },
+      timeout: 20000,
+    },
+  });
+
+  const contents = [
+    ...sanitizedHistory.map((turn) => ({
+      role: turn.role,
+      parts: [{ text: turn.text }],
+    })),
+    {
+      role: 'user' as const,
+      parts: [{ text: sanitizedMessage }],
+    },
+  ];
+
+  const candidateModels = ['gemini-3.1-flash-lite', 'gemini-3.8-flash'] as const;
+  let lastError: unknown = null;
+
+  for (const modelName of candidateModels) {
+    try {
+      const response = await ai.models.generateContent({
+        model: modelName,
+        contents,
+        config: {
+          systemInstruction: AURORA_AI_SYSTEM_INSTRUCTION,
+        },
+      });
+
+      const text = (response.text ?? '').trim();
+      if (text) {
+        return res.status(200).json({
+          reply: text,
+          model: modelName,
+        });
+      }
+    } catch (err: unknown) {
+      lastError = err;
+      console.warn(`Aurora AI model ${modelName} attempt failed:`, err instanceof Error ? err.message : err);
+    }
+  }
+
+  console.error('Aurora AI Gemini generation error:', lastError);
+  return res.status(502).json({
+    error:
+      lastError instanceof Error
+        ? `Aurora AI encountered an upstream error: ${lastError.message}`
+        : 'Aurora AI is temporarily busy. Please try your question again in a moment.',
+  });
 });
 
 // Mount API routes on both /api and / so Vercel serverless rewrites work regardless of path prefixing
