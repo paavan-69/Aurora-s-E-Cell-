@@ -197,3 +197,85 @@ export async function compressImageFileToDataUrl(
     reader.readAsDataURL(file);
   });
 }
+
+/**
+ * Processes an uploaded brand logo file (PNG, SVG, or WebP) while preserving 100% alpha transparency
+ * and original aspect ratio. Outputs an optimized transparent PNG or SVG data URL that fits safely
+ * inside Firestore's document limit.
+ */
+export async function processLogoFileToDataUrl(
+  file: File,
+  maxDimension = 600
+): Promise<string> {
+  const fileName = (file.name || '').trim().toLowerCase();
+  const mimeType = (file.type || '').trim().toLowerCase();
+  const isSvg = mimeType === 'image/svg+xml' || fileName.endsWith('.svg');
+  const isPngOrWebp =
+    mimeType === 'image/png' ||
+    mimeType === 'image/webp' ||
+    fileName.endsWith('.png') ||
+    fileName.endsWith('.webp');
+
+  if (!isSvg && !isPngOrWebp) {
+    throw new Error('Unsupported logo format. Please upload a transparent PNG, SVG, or WebP file.');
+  }
+
+  if (!file.size || file.size <= 0) {
+    throw new Error('Selected logo file is empty.');
+  }
+
+  if (file.size > 5 * 1024 * 1024) {
+    throw new Error('Logo file size must not exceed 5 MB.');
+  }
+
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Failed to read logo file.'));
+    reader.onload = () => {
+      const rawDataUrl = String(reader.result || '');
+      if (isSvg) {
+        if (rawDataUrl.length > 440_000) {
+          reject(new Error('SVG file is too large. Please upload an SVG under 300 KB.'));
+          return;
+        }
+        resolve(rawDataUrl);
+        return;
+      }
+
+      const img = new Image();
+      img.onerror = () => reject(new Error('Invalid logo image file.'));
+      img.onload = () => {
+        const renderAtMaxDim = (limitDim: number): string => {
+          const naturalW = Math.max(img.naturalWidth || img.width, 1);
+          const naturalH = Math.max(img.naturalHeight || img.height, 1);
+          const scale = Math.min(1, limitDim / Math.max(naturalW, naturalH));
+          const width = Math.max(1, Math.round(naturalW * scale));
+          const height = Math.max(1, Math.round(naturalH * scale));
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            return rawDataUrl;
+          }
+          // Explicitly clear canvas to preserve full alpha channel transparency
+          ctx.clearRect(0, 0, width, height);
+          ctx.drawImage(img, 0, 0, width, height);
+          return canvas.toDataURL('image/png');
+        };
+
+        let pngDataUrl = renderAtMaxDim(maxDimension);
+        if (pngDataUrl.length > 440_000) {
+          pngDataUrl = renderAtMaxDim(400);
+        }
+        if (pngDataUrl.length > 440_000) {
+          pngDataUrl = renderAtMaxDim(280);
+        }
+        resolve(pngDataUrl);
+      };
+      img.src = rawDataUrl;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+

@@ -41,10 +41,19 @@ import {
   BOOTSTRAP_ADMIN_VERIFIER,
   sanitizeText,
   BLUEPRINT_LIMITS,
+  MAX_NEC_MEMBERS,
+  validateNecMemberInput,
+  sortRecordsByDisplayOrder,
+  computeReorderedDisplayOrders,
   type UserProfileRecord,
   type EventRecord,
   type AchievementRecord,
   type StartupRecord,
+  type NecMemberRecord,
+  type LeadershipRecord,
+  type SponsorRecord,
+  type LeadershipCategory,
+  type SponsorCategory,
   type LoginActivityRecord,
   type AdminActivityRecord,
   type AccountStatus,
@@ -106,6 +115,9 @@ export default function App() {
   const [events, setEvents] = useState<EventRecord[]>([]);
   const [achievements, setAchievements] = useState<AchievementRecord[]>([]);
   const [startups, setStartups] = useState<StartupRecord[]>([]);
+  const [necMembers, setNecMembers] = useState<NecMemberRecord[]>([]);
+  const [leadershipMembers, setLeadershipMembers] = useState<LeadershipRecord[]>([]);
+  const [sponsors, setSponsors] = useState<SponsorRecord[]>([]);
   const [loginLogs, setLoginLogs] = useState<LoginActivityRecord[]>([]);
   const [adminLogs, setAdminLogs] = useState<AdminActivityRecord[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(false);
@@ -118,6 +130,41 @@ export default function App() {
     spreadsheetUrl: '',
     lastSyncedAt: '',
   });
+
+  // Website Branding & Logos State (Aurora E-Cell top-left & Aurora College top-right)
+  const [websiteBranding, setWebsiteBranding] = useState<{
+    ecellLogoUrl: string;
+    collegeLogoUrl: string;
+  }>({
+    ecellLogoUrl: '',
+    collegeLogoUrl: '',
+  });
+
+  // Real-time listener for Website Branding & Logos across AuthScreen, StudentPortal, and AdminDashboard
+  useEffect(() => {
+    const brandingRef = doc(db, 'branding', 'website_logos');
+    const unsub = onSnapshot(
+      brandingRef,
+      (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          setWebsiteBranding({
+            ecellLogoUrl: String(data.ecellLogoUrl || ''),
+            collegeLogoUrl: String(data.collegeLogoUrl || ''),
+          });
+        } else {
+          setWebsiteBranding({
+            ecellLogoUrl: '',
+            collegeLogoUrl: '',
+          });
+        }
+      },
+      (err) => {
+        console.warn('Could not load website branding logos:', err);
+      }
+    );
+    return () => unsub();
+  }, []);
 
   // Guard URL hash/path attempts to access #admin or /admin by non-admin users
   useEffect(() => {
@@ -393,6 +440,92 @@ export default function App() {
           setStartups(items);
         },
         (err) => handleFirestoreError(err, OperationType.LIST, 'startups')
+      )
+    );
+
+    // NEC Team listener (Admins read all up to 25; students read published == true up to 25)
+    const necQuery = isAdmin
+      ? query(collection(db, 'nec_team'), limit(MAX_NEC_MEMBERS))
+      : query(collection(db, 'nec_team'), where('published', '==', true), limit(MAX_NEC_MEMBERS));
+
+    unsubscribers.push(
+      onSnapshot(
+        necQuery,
+        (snap) => {
+          const items: NecMemberRecord[] = snap.docs.map((d, idx) => {
+            const data = d.data();
+            return {
+              id: String(data.id || d.id),
+              name: String(data.name || ''),
+              role: String(data.role || ''),
+              photoUrl: String(data.photoUrl || ''),
+              displayOrder: Number(data.displayOrder) || idx + 1,
+              published: Boolean(data.published),
+              authorId: String(data.authorId || ''),
+            };
+          });
+          setNecMembers(sortRecordsByDisplayOrder(items));
+        },
+        (err) => handleFirestoreError(err, OperationType.LIST, 'nec_team')
+      )
+    );
+
+    // Leadership & Convenors listener
+    const leadershipQuery = isAdmin
+      ? query(collection(db, 'leadership'), limit(500))
+      : query(collection(db, 'leadership'), where('published', '==', true), limit(500));
+
+    unsubscribers.push(
+      onSnapshot(
+        leadershipQuery,
+        (snap) => {
+          const items: LeadershipRecord[] = snap.docs.map((d, idx) => {
+            const data = d.data();
+            const cat: LeadershipCategory = data.category === 'Head' ? 'Head' : 'Convenor';
+            return {
+              id: String(data.id || d.id),
+              name: String(data.name || ''),
+              role: String(data.role || ''),
+              qualification: String(data.qualification || ''),
+              photoUrl: String(data.photoUrl || ''),
+              category: cat,
+              displayOrder: Number(data.displayOrder) || idx + 1,
+              published: Boolean(data.published),
+              authorId: String(data.authorId || ''),
+            };
+          });
+          setLeadershipMembers(sortRecordsByDisplayOrder(items));
+        },
+        (err) => handleFirestoreError(err, OperationType.LIST, 'leadership')
+      )
+    );
+
+    // Sponsors & Supporting Partners listener
+    const sponsorsQuery = isAdmin
+      ? query(collection(db, 'sponsors'), limit(500))
+      : query(collection(db, 'sponsors'), where('published', '==', true), limit(500));
+
+    unsubscribers.push(
+      onSnapshot(
+        sponsorsQuery,
+        (snap) => {
+          const items: SponsorRecord[] = snap.docs.map((d, idx) => {
+            const data = d.data();
+            const cat: SponsorCategory =
+              data.category === 'Sponsor' ? 'Sponsor' : 'Supporting Partner';
+            return {
+              id: String(data.id || d.id),
+              name: String(data.name || ''),
+              logoUrl: String(data.logoUrl || ''),
+              category: cat,
+              displayOrder: Number(data.displayOrder) || idx + 1,
+              published: Boolean(data.published),
+              authorId: String(data.authorId || ''),
+            };
+          });
+          setSponsors(sortRecordsByDisplayOrder(items));
+        },
+        (err) => handleFirestoreError(err, OperationType.LIST, 'sponsors')
       )
     );
 
@@ -1139,14 +1272,416 @@ export default function App() {
     await recordAdminLog(`Changed user status to ${nextStatus}`, 'user', userId);
   };
 
+  const handleSaveWebsiteBranding = async (brandingInput: {
+    ecellLogoUrl: string;
+    collegeLogoUrl: string;
+  }) => {
+    if (!currentUserProfile || !isAdmin) {
+      throw new Error('Unauthorized: Authenticated Administrator session required.');
+    }
+    await ensureAdminRegisteredInFirestore(currentUserProfile.uid, currentUserProfile.email);
+
+    const ecellLogoUrl = (brandingInput.ecellLogoUrl || '').trim().slice(0, BLUEPRINT_LIMITS.MAX_LOGO_DATA_LEN);
+    const collegeLogoUrl = (brandingInput.collegeLogoUrl || '').trim().slice(0, BLUEPRINT_LIMITS.MAX_LOGO_DATA_LEN);
+    const brandingRef = doc(db, 'branding', 'website_logos');
+
+    try {
+      const existingSnap = await getDoc(brandingRef);
+      if (existingSnap.exists()) {
+        await updateDoc(brandingRef, {
+          ecellLogoUrl,
+          collegeLogoUrl,
+          updatedBy: currentUserProfile.uid,
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        await setDoc(brandingRef, {
+          id: 'website_logos',
+          ecellLogoUrl,
+          collegeLogoUrl,
+          updatedBy: currentUserProfile.uid,
+          updatedAt: serverTimestamp(),
+        });
+      }
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, 'branding/website_logos');
+    }
+
+    await recordAdminLog(
+      'Updated Website Branding & Logos',
+      'branding',
+      'Aurora E-Cell & College Logos'
+    );
+  };
+
+  // NEC Team CRUD & Reorder Handlers (strictly enforces MAX_NEC_MEMBERS = 25)
+  const handleSaveNecMember = async (
+    memberData: {
+      name: string;
+      role: string;
+      photoUrl: string;
+      published: boolean;
+    },
+    existingId?: string
+  ) => {
+    if (!currentUserProfile || !isAdmin) {
+      throw new Error('Unauthorized: Authenticated Administrator session required.');
+    }
+    await ensureAdminRegisteredInFirestore(currentUserProfile.uid, currentUserProfile.email);
+
+    // Client + pure domain validation (25-member cap + duplicate detection)
+    const validation = validateNecMemberInput(memberData, necMembers, existingId);
+    if (!validation.valid) {
+      const msg =
+        validation.errors.limit ||
+        validation.errors.duplicate ||
+        validation.errors.name ||
+        validation.errors.role ||
+        validation.errors.photoUrl ||
+        'Invalid NEC Team member details.';
+      throw new Error(msg);
+    }
+
+    // Server-side validation check (/api/admin/validate-nec-member)
+    if (serverSessionToken && serverSessionToken.startsWith('ecell_st.')) {
+      try {
+        const resp = await fetch('/api/admin/validate-nec-member', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${serverSessionToken}`,
+          },
+          body: JSON.stringify({
+            member: memberData,
+            existingMembers: necMembers.map((m) => ({
+              id: m.id,
+              name: m.name,
+              role: m.role,
+            })),
+            editingMemberId: existingId || null,
+          }),
+        });
+        if (!resp.ok && resp.status === 400) {
+          const errPayload = (await resp.json()) as { errors?: Record<string, string> };
+          const serverErr =
+            errPayload.errors?.limit ||
+            errPayload.errors?.duplicate ||
+            errPayload.errors?.name ||
+            errPayload.errors?.role;
+          if (serverErr) {
+            throw new Error(serverErr);
+          }
+        }
+      } catch (err) {
+        if (err instanceof Error && err.message.includes('Maximum limit')) {
+          throw err;
+        }
+      }
+    }
+
+    const id = existingId || generateSafeId('nec');
+    const existingMember = existingId ? necMembers.find((m) => m.id === existingId) : undefined;
+    const nextOrder = existingMember
+      ? Math.min(MAX_NEC_MEMBERS, Math.max(1, existingMember.displayOrder))
+      : Math.min(MAX_NEC_MEMBERS, necMembers.length + 1);
+
+    const cleanRecord: NecMemberRecord = {
+      id,
+      name: sanitizeText(memberData.name, BLUEPRINT_LIMITS.MAX_NAME_LEN),
+      role: sanitizeText(memberData.role, BLUEPRINT_LIMITS.MAX_ROLE_LEN),
+      photoUrl: (memberData.photoUrl || '').slice(0, BLUEPRINT_LIMITS.MAX_IMAGE_DATA_LEN),
+      displayOrder: nextOrder,
+      published: Boolean(memberData.published),
+      authorId: currentUserProfile.uid,
+    };
+
+    const ref = doc(db, 'nec_team', id);
+    try {
+      if (existingId) {
+        await updateDoc(ref, {
+          name: cleanRecord.name,
+          role: cleanRecord.role,
+          photoUrl: cleanRecord.photoUrl,
+          displayOrder: cleanRecord.displayOrder,
+          published: cleanRecord.published,
+          authorId: cleanRecord.authorId,
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        await setDoc(ref, {
+          ...cleanRecord,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      }
+    } catch (err) {
+      handleFirestoreError(
+        err,
+        existingId ? OperationType.UPDATE : OperationType.CREATE,
+        `nec_team/${id}`
+      );
+    }
+
+    await recordAdminLog(
+      existingId ? 'Updated NEC Team member' : 'Added NEC Team member',
+      'nec_team',
+      `${cleanRecord.name} (${cleanRecord.role})`
+    );
+  };
+
+  const handleDeleteNecMember = async (memberId: string, name: string) => {
+    if (!currentUserProfile || !isAdmin) {
+      throw new Error('Unauthorized: Authenticated Administrator session required.');
+    }
+    await ensureAdminRegisteredInFirestore(currentUserProfile.uid, currentUserProfile.email);
+    try {
+      await deleteDoc(doc(db, 'nec_team', memberId));
+      // Normalize remaining displayOrders so 1..N stays contiguous within 1..25
+      const remaining = sortRecordsByDisplayOrder(necMembers.filter((m) => m.id !== memberId));
+      await Promise.all(
+        remaining.map((m, idx) =>
+          m.displayOrder !== idx + 1
+            ? updateDoc(doc(db, 'nec_team', m.id), {
+                displayOrder: idx + 1,
+                updatedAt: serverTimestamp(),
+              })
+            : Promise.resolve()
+        )
+      );
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, `nec_team/${memberId}`);
+    }
+    await recordAdminLog('Removed NEC Team member', 'nec_team', name);
+  };
+
+  const handleReorderNecMember = async (memberId: string, direction: 'up' | 'down') => {
+    if (!currentUserProfile || !isAdmin) return;
+    await ensureAdminRegisteredInFirestore(currentUserProfile.uid, currentUserProfile.email);
+    const updates = computeReorderedDisplayOrders(necMembers, memberId, direction);
+    if (updates.length === 0) return;
+    try {
+      await Promise.all(
+        updates.map((u) =>
+          updateDoc(doc(db, 'nec_team', u.id), {
+            displayOrder: Math.min(MAX_NEC_MEMBERS, Math.max(1, u.displayOrder)),
+            updatedAt: serverTimestamp(),
+          })
+        )
+      );
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, 'nec_team');
+    }
+  };
+
+  // Leadership & Convenors CRUD & Reorder Handlers
+  const handleSaveLeadership = async (
+    leaderData: {
+      name: string;
+      role: string;
+      qualification: string;
+      photoUrl: string;
+      category: LeadershipCategory;
+      published: boolean;
+    },
+    existingId?: string
+  ) => {
+    if (!currentUserProfile || !isAdmin) {
+      throw new Error('Unauthorized: Authenticated Administrator session required.');
+    }
+    await ensureAdminRegisteredInFirestore(currentUserProfile.uid, currentUserProfile.email);
+
+    const id = existingId || generateSafeId('ldr');
+    const existingItem = existingId ? leadershipMembers.find((l) => l.id === existingId) : undefined;
+    const nextOrder = existingItem
+      ? Math.max(1, existingItem.displayOrder)
+      : leadershipMembers.length + 1;
+
+    const cleanRecord: LeadershipRecord = {
+      id,
+      name: sanitizeText(leaderData.name, BLUEPRINT_LIMITS.MAX_NAME_LEN),
+      role: sanitizeText(leaderData.role, BLUEPRINT_LIMITS.MAX_ROLE_LEN),
+      qualification: sanitizeText(
+        leaderData.qualification,
+        BLUEPRINT_LIMITS.MAX_QUALIFICATION_LEN
+      ),
+      photoUrl: (leaderData.photoUrl || '').slice(0, BLUEPRINT_LIMITS.MAX_IMAGE_DATA_LEN),
+      category: leaderData.category === 'Head' ? 'Head' : 'Convenor',
+      displayOrder: nextOrder,
+      published: Boolean(leaderData.published),
+      authorId: currentUserProfile.uid,
+    };
+
+    const ref = doc(db, 'leadership', id);
+    try {
+      if (existingId) {
+        await updateDoc(ref, {
+          name: cleanRecord.name,
+          role: cleanRecord.role,
+          qualification: cleanRecord.qualification,
+          photoUrl: cleanRecord.photoUrl,
+          category: cleanRecord.category,
+          displayOrder: cleanRecord.displayOrder,
+          published: cleanRecord.published,
+          authorId: cleanRecord.authorId,
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        await setDoc(ref, {
+          ...cleanRecord,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      }
+    } catch (err) {
+      handleFirestoreError(
+        err,
+        existingId ? OperationType.UPDATE : OperationType.CREATE,
+        `leadership/${id}`
+      );
+    }
+
+    await recordAdminLog(
+      existingId ? 'Updated Leadership profile' : 'Added Leadership profile',
+      'leadership',
+      `${cleanRecord.name} (${cleanRecord.category})`
+    );
+  };
+
+  const handleDeleteLeadership = async (leaderId: string, name: string) => {
+    if (!currentUserProfile || !isAdmin) {
+      throw new Error('Unauthorized: Authenticated Administrator session required.');
+    }
+    await ensureAdminRegisteredInFirestore(currentUserProfile.uid, currentUserProfile.email);
+    try {
+      await deleteDoc(doc(db, 'leadership', leaderId));
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, `leadership/${leaderId}`);
+    }
+    await recordAdminLog('Deleted Leadership profile', 'leadership', name);
+  };
+
+  const handleReorderLeadership = async (leaderId: string, direction: 'up' | 'down') => {
+    if (!currentUserProfile || !isAdmin) return;
+    await ensureAdminRegisteredInFirestore(currentUserProfile.uid, currentUserProfile.email);
+    const updates = computeReorderedDisplayOrders(leadershipMembers, leaderId, direction);
+    if (updates.length === 0) return;
+    try {
+      await Promise.all(
+        updates.map((u) =>
+          updateDoc(doc(db, 'leadership', u.id), {
+            displayOrder: Math.max(1, u.displayOrder),
+            updatedAt: serverTimestamp(),
+          })
+        )
+      );
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, 'leadership');
+    }
+  };
+
+  // Sponsors & Supporting Partners CRUD & Reorder Handlers
+  const handleSaveSponsor = async (
+    sponsorData: {
+      name: string;
+      logoUrl: string;
+      category: SponsorCategory;
+      published: boolean;
+    },
+    existingId?: string
+  ) => {
+    if (!currentUserProfile || !isAdmin) {
+      throw new Error('Unauthorized: Authenticated Administrator session required.');
+    }
+    await ensureAdminRegisteredInFirestore(currentUserProfile.uid, currentUserProfile.email);
+
+    const id = existingId || generateSafeId('spn');
+    const existingItem = existingId ? sponsors.find((s) => s.id === existingId) : undefined;
+    const nextOrder = existingItem ? Math.max(1, existingItem.displayOrder) : sponsors.length + 1;
+
+    const cleanRecord: SponsorRecord = {
+      id,
+      name: sanitizeText(sponsorData.name, BLUEPRINT_LIMITS.MAX_TITLE_LEN),
+      logoUrl: (sponsorData.logoUrl || '').slice(0, BLUEPRINT_LIMITS.MAX_IMAGE_DATA_LEN),
+      category: sponsorData.category === 'Sponsor' ? 'Sponsor' : 'Supporting Partner',
+      displayOrder: nextOrder,
+      published: Boolean(sponsorData.published),
+      authorId: currentUserProfile.uid,
+    };
+
+    const ref = doc(db, 'sponsors', id);
+    try {
+      if (existingId) {
+        await updateDoc(ref, {
+          name: cleanRecord.name,
+          logoUrl: cleanRecord.logoUrl,
+          category: cleanRecord.category,
+          displayOrder: cleanRecord.displayOrder,
+          published: cleanRecord.published,
+          authorId: cleanRecord.authorId,
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        await setDoc(ref, {
+          ...cleanRecord,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      }
+    } catch (err) {
+      handleFirestoreError(
+        err,
+        existingId ? OperationType.UPDATE : OperationType.CREATE,
+        `sponsors/${id}`
+      );
+    }
+
+    await recordAdminLog(
+      existingId ? 'Updated Partner / Sponsor' : 'Added Partner / Sponsor',
+      'sponsor',
+      `${cleanRecord.name} (${cleanRecord.category})`
+    );
+  };
+
+  const handleDeleteSponsor = async (sponsorId: string, name: string) => {
+    if (!currentUserProfile || !isAdmin) {
+      throw new Error('Unauthorized: Authenticated Administrator session required.');
+    }
+    await ensureAdminRegisteredInFirestore(currentUserProfile.uid, currentUserProfile.email);
+    try {
+      await deleteDoc(doc(db, 'sponsors', sponsorId));
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, `sponsors/${sponsorId}`);
+    }
+    await recordAdminLog('Deleted Partner / Sponsor', 'sponsor', name);
+  };
+
+  const handleReorderSponsor = async (sponsorId: string, direction: 'up' | 'down') => {
+    if (!currentUserProfile || !isAdmin) return;
+    await ensureAdminRegisteredInFirestore(currentUserProfile.uid, currentUserProfile.email);
+    const updates = computeReorderedDisplayOrders(sponsors, sponsorId, direction);
+    if (updates.length === 0) return;
+    try {
+      await Promise.all(
+        updates.map((u) =>
+          updateDoc(doc(db, 'sponsors', u.id), {
+            displayOrder: Math.max(1, u.displayOrder),
+            updatedAt: serverTimestamp(),
+          })
+        )
+      );
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, 'sponsors');
+    }
+  };
+
   if (!authReady) {
     return (
-      <div className="min-h-screen bg-halftone-light flex items-center justify-center p-6">
-        <div className="bg-[#FFFDF7] border-2 border-[#0F0F0F] rounded-xl p-8 pop-shadow text-center space-y-3">
-          <div className="font-display font-extrabold text-2xl text-[#0F0F0F]">
-            AURORA E-CELL
+      <div className="min-h-screen bg-aurora-void flex items-center justify-center p-6">
+        <div className="aurora-card rounded-2xl p-8 text-center space-y-3">
+          <div className="font-display font-bold text-2xl text-white tracking-tight">
+            AURORA <span className="text-[#FF3030]">E-CELL</span>
           </div>
-          <p className="text-xs font-mono text-neutral-600">
+          <p className="text-xs font-mono text-[#A1A1AA]">
             Verifying session &amp; security credentials...
           </p>
         </div>
@@ -1167,6 +1702,7 @@ export default function App() {
           setAuthSuccess(null);
         }}
         isSubmitting={isSubmittingAuth}
+        websiteBranding={websiteBranding}
       />
     );
   }
@@ -1174,13 +1710,18 @@ export default function App() {
   const publishedEvents = events.filter((e) => e.published);
   const publishedAchievements = achievements.filter((a) => a.published);
   const publishedStartups = startups.filter((s) => s.published);
+  const publishedNecMembers = sortRecordsByDisplayOrder(necMembers.filter((m) => m.published));
+  const publishedLeadership = sortRecordsByDisplayOrder(
+    leadershipMembers.filter((l) => l.published)
+  );
+  const publishedSponsors = sortRecordsByDisplayOrder(sponsors.filter((s) => s.published));
 
   return (
     <>
       {accessDeniedNotice && (
         <div
           role="alert"
-          className="bg-[#E11D48] text-[#FFFDF7] px-6 py-3 border-b-2 border-[#0F0F0F] flex items-center justify-between text-xs font-bold"
+          className="bg-[#FF3030] text-white px-6 py-3 border-b border-white/20 flex items-center justify-between text-xs font-bold"
         >
           <span>{accessDeniedNotice}</span>
           <button
@@ -1200,6 +1741,9 @@ export default function App() {
           events={events}
           achievements={achievements}
           startups={startups}
+          necMembers={necMembers}
+          leadershipMembers={leadershipMembers}
+          sponsors={sponsors}
           loginLogs={loginLogs}
           adminLogs={adminLogs}
           spreadsheetInfo={spreadsheetInfo}
@@ -1228,7 +1772,18 @@ export default function App() {
           onDeleteAchievement={handleDeleteAchievement}
           onSaveStartup={handleSaveStartup}
           onDeleteStartup={handleDeleteStartup}
+          onSaveNecMember={handleSaveNecMember}
+          onDeleteNecMember={handleDeleteNecMember}
+          onReorderNecMember={handleReorderNecMember}
+          onSaveLeadership={handleSaveLeadership}
+          onDeleteLeadership={handleDeleteLeadership}
+          onReorderLeadership={handleReorderLeadership}
+          onSaveSponsor={handleSaveSponsor}
+          onDeleteSponsor={handleDeleteSponsor}
+          onReorderSponsor={handleReorderSponsor}
           onUpdateUserStatus={handleUpdateUserStatus}
+          websiteBranding={websiteBranding}
+          onSaveWebsiteBranding={handleSaveWebsiteBranding}
         />
       ) : (
         <StudentPortal
@@ -1243,7 +1798,11 @@ export default function App() {
           publishedEvents={publishedEvents}
           publishedAchievements={publishedAchievements}
           publishedStartups={publishedStartups}
+          publishedNecMembers={publishedNecMembers}
+          publishedLeadership={publishedLeadership}
+          publishedSponsors={publishedSponsors}
           isLoadingData={isLoadingData}
+          websiteBranding={websiteBranding}
         />
       )}
     </>

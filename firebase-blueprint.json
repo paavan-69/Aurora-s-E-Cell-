@@ -425,7 +425,17 @@
         },
         "targetType": {
           "type": "string",
-          "enum": ["event", "achievement", "startup", "user", "sheets_sync"]
+          "enum": [
+            "event",
+            "achievement",
+            "startup",
+            "user",
+            "sheets_sync",
+            "branding",
+            "nec_team",
+            "leadership",
+            "sponsor"
+          ]
         },
         "targetTitle": {
           "type": "string",
@@ -486,6 +496,227 @@
         "updatedBy",
         "updatedAt"
       ]
+    },
+    "WebsiteBranding": {
+      "title": "WebsiteBranding",
+      "description": "Stores dynamic Aurora E-Cell Logo (top-left) and Aurora College Logo (top-right) with transparent backgrounds.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "maxLength": 128
+        },
+        "ecellLogoUrl": {
+          "type": "string",
+          "maxLength": 450000
+        },
+        "collegeLogoUrl": {
+          "type": "string",
+          "maxLength": 450000
+        },
+        "updatedBy": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "maxLength": 128
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "ecellLogoUrl",
+        "collegeLogoUrl",
+        "updatedBy",
+        "updatedAt"
+      ]
+    },
+    "NecMemberItem": {
+      "title": "NecMemberItem",
+      "description": "National Entrepreneurship Challenge (NEC) Team member profile (strictly capped at 25 members).",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "maxLength": 128
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "role": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 140
+        },
+        "photoUrl": {
+          "type": "string",
+          "maxLength": 800000
+        },
+        "displayOrder": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 25
+        },
+        "published": {
+          "type": "boolean"
+        },
+        "authorId": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "maxLength": 128
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "role",
+        "photoUrl",
+        "displayOrder",
+        "published",
+        "authorId",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "LeadershipItem": {
+      "title": "LeadershipItem",
+      "description": "Leadership & Convenors profile (Heads and Convenors).",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "maxLength": 128
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "role": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 140
+        },
+        "qualification": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 180
+        },
+        "photoUrl": {
+          "type": "string",
+          "maxLength": 800000
+        },
+        "category": {
+          "type": "string",
+          "enum": ["Head", "Convenor"]
+        },
+        "displayOrder": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 500
+        },
+        "published": {
+          "type": "boolean"
+        },
+        "authorId": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "maxLength": 128
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "role",
+        "qualification",
+        "photoUrl",
+        "category",
+        "displayOrder",
+        "published",
+        "authorId",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "SponsorItem": {
+      "title": "SponsorItem",
+      "description": "Sponsor or Supporting Partner organization showcased on the website.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "maxLength": 128
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "logoUrl": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 800000
+        },
+        "category": {
+          "type": "string",
+          "enum": ["Sponsor", "Supporting Partner"]
+        },
+        "displayOrder": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 500
+        },
+        "published": {
+          "type": "boolean"
+        },
+        "authorId": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "maxLength": 128
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "logoUrl",
+        "category",
+        "displayOrder",
+        "published",
+        "authorId",
+        "createdAt",
+        "updatedAt"
+      ]
     }
   },
   "firestore": {
@@ -524,6 +755,22 @@
     "/settings/{settingId}": {
       "schema": { "$ref": "#/entities/SyncSettings" },
       "description": "Google Sheets synchronisation settings."
+    },
+    "/branding/{brandingId}": {
+      "schema": { "$ref": "#/entities/WebsiteBranding" },
+      "description": "Dynamic Aurora E-Cell and Aurora College logos."
+    },
+    "/nec_team/{memberId}": {
+      "schema": { "$ref": "#/entities/NecMemberItem" },
+      "description": "NEC Team member profiles (max 25)."
+    },
+    "/leadership/{leaderId}": {
+      "schema": { "$ref": "#/entities/LeadershipItem" },
+      "description": "Leadership & Convenors profiles (Heads and Convenors)."
+    },
+    "/sponsors/{sponsorId}": {
+      "schema": { "$ref": "#/entities/SponsorItem" },
+      "description": "Sponsors and Supporting Partners showcase."
     }
   }
 }

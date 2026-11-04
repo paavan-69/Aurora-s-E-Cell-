@@ -3,16 +3,23 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import dotenv from 'dotenv';
+import { GoogleGenAI } from '@google/genai';
 import firebaseAppletConfig from '../firebase-applet-config.json';
 import {
   SHEET1_HEADERS,
   SHEET2_HEADERS,
+  MAX_NEC_MEMBERS,
+  AURORA_AI_SYSTEM_INSTRUCTION,
+  validateAuroraAiRequest,
+  buildAuroraAiStructuredFallback,
+  validateNecMemberInput,
   formatUserRegistrationSheetRows,
   formatLoginActivitySheetRows,
   isAuthorizedAdminEmail,
   deriveUserIdFromEmail,
   type UserProfileRecord,
   type LoginActivityRecord,
+  type NecMemberRecord,
 } from '../src/utils/ecellLogic';
 
 dotenv.config();
@@ -698,6 +705,139 @@ apiRouter.post('/sheets/sync', async (req: Request, res: Response) => {
     console.error('Google Sheets sync error:', err);
     return res.status(500).json({
       error: err instanceof Error ? err.message : 'Failed to synchronise Google Sheet.',
+    });
+  }
+});
+
+/**
+ * POST /api/admin/validate-nec-member
+ * Backend validation endpoint that verifies administrator authorization and
+ * strictly enforces the 25-member maximum limit (MAX_NEC_MEMBERS = 25) on the server.
+ */
+apiRouter.post('/admin/validate-nec-member', async (req: Request, res: Response) => {
+  const authToken = extractBearerToken(req);
+  if (!authToken) {
+    return res.status(401).json({ error: 'Authentication required: Missing session token.' });
+  }
+
+  const verifiedUser = await verifyFirebaseIdToken(authToken);
+  if (!verifiedUser || !isServerAuthorizedAdmin(verifiedUser.email)) {
+    return res.status(403).json({
+      error: 'Forbidden: Only authorized administrators can manage the NEC Team.',
+    });
+  }
+
+  const {
+    member,
+    existingMembers = [],
+    editingMemberId = null,
+  } = (req.body || {}) as {
+    member?: { name?: string; role?: string; photoUrl?: string };
+    existingMembers?: Array<Pick<NecMemberRecord, 'id' | 'name' | 'role'>>;
+    editingMemberId?: string | null;
+  };
+
+  const validation = validateNecMemberInput(
+    {
+      name: String(member?.name || ''),
+      role: String(member?.role || ''),
+      photoUrl: String(member?.photoUrl || ''),
+    },
+    Array.isArray(existingMembers) ? existingMembers : [],
+    editingMemberId
+  );
+
+  if (!validation.valid) {
+    return res.status(400).json({
+      valid: false,
+      maxMembers: MAX_NEC_MEMBERS,
+      currentCount: Array.isArray(existingMembers) ? existingMembers.length : 0,
+      errors: validation.errors,
+    });
+  }
+
+  return res.status(200).json({
+    valid: true,
+    maxMembers: MAX_NEC_MEMBERS,
+    currentCount: Array.isArray(existingMembers) ? existingMembers.length : 0,
+  });
+});
+
+/**
+ * POST /api/aurora-ai
+ * Server-side AI Entrepreneurship Assistant endpoint powered by @google/genai (gemini-3.8-flash).
+ * Never exposes API keys to the browser and supports multi-turn conversational context.
+ */
+apiRouter.post('/aurora-ai', async (req: Request, res: Response) => {
+  const validation = validateAuroraAiRequest({
+    message: req.body?.message,
+    history: req.body?.history,
+  });
+
+  if (!validation.valid) {
+    return res.status(400).json({
+      error: validation.error || 'Invalid prompt.',
+    });
+  }
+
+  const { sanitizedMessage, sanitizedHistory } = validation;
+  const geminiApiKey = (process.env.GEMINI_API_KEY || '').trim();
+
+  if (!geminiApiKey) {
+    const fallbackReply = buildAuroraAiStructuredFallback(sanitizedMessage, sanitizedHistory);
+    return res.status(200).json({
+      reply: fallbackReply,
+      model: 'aurora-strategy-engine',
+    });
+  }
+
+  try {
+    const ai = new GoogleGenAI({
+      apiKey: geminiApiKey,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        },
+      },
+    });
+
+    const contents = [
+      ...sanitizedHistory.map((turn) => ({
+        role: turn.role,
+        parts: [{ text: turn.text }],
+      })),
+      {
+        role: 'user' as const,
+        parts: [{ text: sanitizedMessage }],
+      },
+    ];
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-3.8-flash',
+      contents,
+      config: {
+        systemInstruction: AURORA_AI_SYSTEM_INSTRUCTION,
+      },
+    });
+
+    const text = (response.text ?? '').trim();
+    if (!text) {
+      return res.status(200).json({
+        reply: buildAuroraAiStructuredFallback(sanitizedMessage, sanitizedHistory),
+        model: 'aurora-strategy-engine',
+      });
+    }
+
+    return res.status(200).json({
+      reply: text,
+      model: 'gemini-3.8-flash',
+    });
+  } catch (err: unknown) {
+    console.error('Aurora AI Gemini generation error:', err);
+    const fallbackReply = buildAuroraAiStructuredFallback(sanitizedMessage, sanitizedHistory);
+    return res.status(200).json({
+      reply: fallbackReply,
+      model: 'aurora-strategy-engine',
     });
   }
 });

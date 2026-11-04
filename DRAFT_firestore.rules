@@ -226,7 +226,11 @@ service cloud.firestore {
           data.targetType == 'achievement' ||
           data.targetType == 'startup' ||
           data.targetType == 'user' ||
-          data.targetType == 'sheets_sync'
+          data.targetType == 'sheets_sync' ||
+          data.targetType == 'branding' ||
+          data.targetType == 'nec_team' ||
+          data.targetType == 'leadership' ||
+          data.targetType == 'sponsor'
         ) &&
         data.targetTitle is string && data.targetTitle.size() <= 200 &&
         data.createdAt is timestamp;
@@ -244,6 +248,82 @@ service cloud.firestore {
         data.spreadsheetUrl is string && data.spreadsheetUrl.size() <= 500 &&
         data.lastSyncedAt is string && data.lastSyncedAt.size() <= 64 &&
         isValidId(data.updatedBy) &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidWebsiteBranding(data) {
+      return data.keys().hasAll([
+          'id', 'ecellLogoUrl', 'collegeLogoUrl', 'updatedBy', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'ecellLogoUrl', 'collegeLogoUrl', 'updatedBy', 'updatedAt'
+        ]) &&
+        isValidId(data.id) &&
+        data.ecellLogoUrl is string && data.ecellLogoUrl.size() <= 450000 &&
+        data.collegeLogoUrl is string && data.collegeLogoUrl.size() <= 450000 &&
+        isValidId(data.updatedBy) &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidNecMemberItem(data) {
+      return data.keys().hasAll([
+          'id', 'name', 'role', 'photoUrl', 'displayOrder', 'published',
+          'authorId', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'name', 'role', 'photoUrl', 'displayOrder', 'published',
+          'authorId', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.id) &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 120 &&
+        data.role is string && data.role.size() >= 1 && data.role.size() <= 140 &&
+        data.photoUrl is string && data.photoUrl.size() <= 800000 &&
+        data.displayOrder is int && data.displayOrder >= 1 && data.displayOrder <= 25 &&
+        data.published is bool &&
+        isValidId(data.authorId) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidLeadershipItem(data) {
+      return data.keys().hasAll([
+          'id', 'name', 'role', 'qualification', 'photoUrl', 'category',
+          'displayOrder', 'published', 'authorId', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'name', 'role', 'qualification', 'photoUrl', 'category',
+          'displayOrder', 'published', 'authorId', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.id) &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 120 &&
+        data.role is string && data.role.size() >= 1 && data.role.size() <= 140 &&
+        data.qualification is string && data.qualification.size() >= 1 && data.qualification.size() <= 180 &&
+        data.photoUrl is string && data.photoUrl.size() <= 800000 &&
+        data.category is string && (data.category == 'Head' || data.category == 'Convenor') &&
+        data.displayOrder is int && data.displayOrder >= 1 && data.displayOrder <= 500 &&
+        data.published is bool &&
+        isValidId(data.authorId) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidSponsorItem(data) {
+      return data.keys().hasAll([
+          'id', 'name', 'logoUrl', 'category', 'displayOrder', 'published',
+          'authorId', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'name', 'logoUrl', 'category', 'displayOrder', 'published',
+          'authorId', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.id) &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 160 &&
+        data.logoUrl is string && data.logoUrl.size() >= 1 && data.logoUrl.size() <= 800000 &&
+        data.category is string && (data.category == 'Sponsor' || data.category == 'Supporting Partner') &&
+        data.displayOrder is int && data.displayOrder >= 1 && data.displayOrder <= 500 &&
+        data.published is bool &&
+        isValidId(data.authorId) &&
+        data.createdAt is timestamp &&
         data.updatedAt is timestamp;
     }
 
@@ -451,6 +531,105 @@ service cloud.firestore {
         ]);
 
       allow delete: if false;
+    }
+
+    // 9. /branding/{brandingId}
+    match /branding/{brandingId} {
+      allow get: if isValidId(brandingId);
+      allow list: if request.query.limit <= 20;
+
+      allow create: if isValidId(brandingId) &&
+        isValidWebsiteBranding(incoming()) &&
+        incoming().id == brandingId &&
+        incoming().updatedAt == request.time &&
+        (isAdmin() || isRegisteredAdminUid(incoming().updatedBy) || hasActiveAdminRegistry());
+
+      allow update: if isValidId(brandingId) &&
+        isValidWebsiteBranding(incoming()) &&
+        incoming().id == existing().id &&
+        incoming().updatedAt == request.time &&
+        (isAdmin() || isRegisteredAdminUid(incoming().updatedBy) || hasActiveAdminRegistry()) &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'ecellLogoUrl', 'collegeLogoUrl', 'updatedBy', 'updatedAt'
+        ]);
+
+      allow delete: if isValidId(brandingId) && (isAdmin() || hasActiveAdminRegistry());
+    }
+
+    // 10. /nec_team/{memberId} (Strictly capped at 25 members)
+    match /nec_team/{memberId} {
+      allow get: if isValidId(memberId) && (resource.data.published == true || isAdmin() || isRegisteredAdminUid(resource.data.authorId) || hasActiveAdminRegistry());
+      allow list: if resource.data.published == true || isAdmin() || request.query.limit <= 25;
+
+      allow create: if isValidId(memberId) &&
+        isValidNecMemberItem(incoming()) &&
+        incoming().id == memberId &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        (isAdmin() || isRegisteredAdminUid(incoming().authorId) || hasActiveAdminRegistry());
+
+      allow update: if isValidId(memberId) &&
+        isValidNecMemberItem(incoming()) &&
+        incoming().id == existing().id &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (isAdmin() || isRegisteredAdminUid(incoming().authorId) || isRegisteredAdminUid(existing().authorId) || hasActiveAdminRegistry()) &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'name', 'role', 'photoUrl', 'displayOrder', 'published', 'authorId', 'updatedAt'
+        ]);
+
+      allow delete: if isValidId(memberId) && (isAdmin() || isRegisteredAdminUid(resource.data.authorId) || hasActiveAdminRegistry());
+    }
+
+    // 11. /leadership/{leaderId}
+    match /leadership/{leaderId} {
+      allow get: if isValidId(leaderId) && (resource.data.published == true || isAdmin() || isRegisteredAdminUid(resource.data.authorId) || hasActiveAdminRegistry());
+      allow list: if resource.data.published == true || isAdmin() || request.query.limit <= 500;
+
+      allow create: if isValidId(leaderId) &&
+        isValidLeadershipItem(incoming()) &&
+        incoming().id == leaderId &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        (isAdmin() || isRegisteredAdminUid(incoming().authorId) || hasActiveAdminRegistry());
+
+      allow update: if isValidId(leaderId) &&
+        isValidLeadershipItem(incoming()) &&
+        incoming().id == existing().id &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (isAdmin() || isRegisteredAdminUid(incoming().authorId) || isRegisteredAdminUid(existing().authorId) || hasActiveAdminRegistry()) &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'name', 'role', 'qualification', 'photoUrl', 'category',
+          'displayOrder', 'published', 'authorId', 'updatedAt'
+        ]);
+
+      allow delete: if isValidId(leaderId) && (isAdmin() || isRegisteredAdminUid(resource.data.authorId) || hasActiveAdminRegistry());
+    }
+
+    // 12. /sponsors/{sponsorId}
+    match /sponsors/{sponsorId} {
+      allow get: if isValidId(sponsorId) && (resource.data.published == true || isAdmin() || isRegisteredAdminUid(resource.data.authorId) || hasActiveAdminRegistry());
+      allow list: if resource.data.published == true || isAdmin() || request.query.limit <= 500;
+
+      allow create: if isValidId(sponsorId) &&
+        isValidSponsorItem(incoming()) &&
+        incoming().id == sponsorId &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        (isAdmin() || isRegisteredAdminUid(incoming().authorId) || hasActiveAdminRegistry());
+
+      allow update: if isValidId(sponsorId) &&
+        isValidSponsorItem(incoming()) &&
+        incoming().id == existing().id &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (isAdmin() || isRegisteredAdminUid(incoming().authorId) || isRegisteredAdminUid(existing().authorId) || hasActiveAdminRegistry()) &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'name', 'logoUrl', 'category', 'displayOrder', 'published', 'authorId', 'updatedAt'
+        ]);
+
+      allow delete: if isValidId(sponsorId) && (isAdmin() || isRegisteredAdminUid(resource.data.authorId) || hasActiveAdminRegistry());
     }
   }
 }

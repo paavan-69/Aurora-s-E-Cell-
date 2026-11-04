@@ -286,4 +286,227 @@ test('api/index.ts exports serverless Express handler, server admin role helper,
   assert.equal(verified.email, 'student@aurora.edu.in');
 });
 
+test('validateLogoFileMetadata and validateWebsiteBrandingInput enforce transparent formats, size limits, and allow empty removal', async () => {
+  const logicModule = await import('./ecellLogic');
+
+  const validPngFile = logicModule.validateLogoFileMetadata({
+    name: 'aurora-ecell-logo.png',
+    type: 'image/png',
+    size: 120_000,
+  });
+  assert.equal(validPngFile.valid, true);
+
+  const validSvgFile = logicModule.validateLogoFileMetadata({
+    name: 'aurora-college-logo.svg',
+    type: 'image/svg+xml',
+    size: 42_000,
+  });
+  assert.equal(validSvgFile.valid, true);
+
+  const invalidJpgFile = logicModule.validateLogoFileMetadata({
+    name: 'photo.jpg',
+    type: 'image/jpeg',
+    size: 50_000,
+  });
+  assert.equal(invalidJpgFile.valid, false);
+  assert.ok(invalidJpgFile.errors.file);
+
+  const oversizedFile = logicModule.validateLogoFileMetadata({
+    name: 'huge.png',
+    type: 'image/png',
+    size: 6 * 1024 * 1024,
+  });
+  assert.equal(oversizedFile.valid, false);
+  assert.ok(oversizedFile.errors.size);
+
+  const validEmptyBranding = logicModule.validateWebsiteBrandingInput({
+    ecellLogoUrl: '',
+    collegeLogoUrl: '',
+  });
+  assert.equal(validEmptyBranding.valid, true);
+
+  const validDataUrlBranding = logicModule.validateWebsiteBrandingInput({
+    ecellLogoUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
+    collegeLogoUrl: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjwvc3ZnPg==',
+  });
+  assert.equal(validDataUrlBranding.valid, true);
+
+  const invalidBranding = logicModule.validateWebsiteBrandingInput({
+    ecellLogoUrl: 'data:image/jpeg;base64,/9j/4AAQSkZJRg==',
+    collegeLogoUrl: 'javascript:alert(1)',
+  });
+  assert.equal(invalidBranding.valid, false);
+  assert.ok(invalidBranding.errors.ecellLogoUrl);
+  assert.ok(invalidBranding.errors.collegeLogoUrl);
+
+  const adminPassValid = await logicModule.verifyPasswordWithSalt(
+    'EcellAdmin',
+    logicModule.BOOTSTRAP_ADMIN_VERIFIER.salt,
+    logicModule.BOOTSTRAP_ADMIN_VERIFIER.hash
+  );
+  assert.equal(adminPassValid, true);
+});
+
+test('validateNecMemberInput strictly enforces MAX_NEC_MEMBERS (25) limit, allows editing existing at 25, and prevents duplicates', async () => {
+  const logicModule = await import('./ecellLogic');
+  assert.equal(logicModule.MAX_NEC_MEMBERS, 25);
+
+  const twentyFourMembers = Array.from({ length: 24 }, (_, idx) => ({
+    id: `nec_${idx + 1}`,
+    name: `Member ${idx + 1}`,
+    role: 'Executive',
+  }));
+
+  // 25th member should be allowed
+  const valid25th = logicModule.validateNecMemberInput(
+    {
+      name: 'Member 25',
+      role: 'NEC Lead',
+      photoUrl: '',
+    },
+    twentyFourMembers
+  );
+  assert.equal(valid25th.valid, true);
+
+  const twentyFiveMembers = [
+    ...twentyFourMembers,
+    { id: 'nec_25', name: 'Member 25', role: 'NEC Lead' },
+  ];
+
+  // 26th member must be rejected by the 25-member limit
+  const rejected26th = logicModule.validateNecMemberInput(
+    {
+      name: 'Member 26',
+      role: 'Operations Coordinator',
+      photoUrl: '',
+    },
+    twentyFiveMembers
+  );
+  assert.equal(rejected26th.valid, false);
+  assert.ok(rejected26th.errors.limit);
+  assert.equal(rejected26th.errors.limit.includes('25'), true);
+
+  // Editing an existing member when already at 25/25 must still be allowed
+  const editAt25 = logicModule.validateNecMemberInput(
+    {
+      name: 'Member 25 Updated',
+      role: 'National Challenge Head',
+      photoUrl: '',
+    },
+    twentyFiveMembers,
+    'nec_25'
+  );
+  assert.equal(editAt25.valid, true);
+
+  // Duplicate name + role must be rejected
+  const duplicateMember = logicModule.validateNecMemberInput(
+    {
+      name: 'member 1',
+      role: 'EXECUTIVE',
+    },
+    twentyFourMembers
+  );
+  assert.equal(duplicateMember.valid, false);
+  assert.ok(duplicateMember.errors.duplicate);
+});
+
+test('validateLeadershipInput, validateSponsorInput, and computeReorderedDisplayOrders work accurately', async () => {
+  const logicModule = await import('./ecellLogic');
+
+  const validLeader = logicModule.validateLeadershipInput({
+    name: 'Dr. S. Ramesh',
+    role: 'Faculty Convenor, E-Cell',
+    qualification: 'Ph.D. in Management Studies, MBA',
+    category: 'Convenor',
+    photoUrl: '',
+  });
+  assert.equal(validLeader.valid, true);
+
+  const invalidLeader = logicModule.validateLeadershipInput({
+    name: '',
+    role: '',
+    qualification: '',
+    category: 'InvalidRole',
+  });
+  assert.equal(invalidLeader.valid, false);
+  assert.ok(invalidLeader.errors.name);
+  assert.ok(invalidLeader.errors.role);
+  assert.ok(invalidLeader.errors.qualification);
+  assert.ok(invalidLeader.errors.category);
+
+  const validSponsor = logicModule.validateSponsorInput({
+    name: 'T-Hub Ecosystem',
+    logoUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
+    category: 'Supporting Partner',
+  });
+  assert.equal(validSponsor.valid, true);
+
+  const invalidSponsor = logicModule.validateSponsorInput({
+    name: '',
+    logoUrl: '',
+    category: 'Unknown',
+  });
+  assert.equal(invalidSponsor.valid, false);
+  assert.ok(invalidSponsor.errors.name);
+  assert.ok(invalidSponsor.errors.logoUrl);
+  assert.ok(invalidSponsor.errors.category);
+
+  const items = [
+    { id: 'item_b', displayOrder: 2 },
+    { id: 'item_a', displayOrder: 1 },
+    { id: 'item_c', displayOrder: 3 },
+  ];
+  const movedUp = logicModule.computeReorderedDisplayOrders(items, 'item_b', 'up');
+  assert.deepEqual(movedUp, [
+    { id: 'item_b', displayOrder: 1 },
+    { id: 'item_a', displayOrder: 2 },
+    { id: 'item_c', displayOrder: 3 },
+  ]);
+});
+
+test('Aurora AI constants, request validation, and structured entrepreneurship fallback work accurately', async () => {
+  const logicModule = await import('./ecellLogic');
+
+  assert.equal(logicModule.AURORA_AI_HEADING, 'MEET AURORA AI');
+  assert.equal(logicModule.AURORA_AI_TAGLINE, "Ideas are everywhere. Let's build yours.");
+  assert.equal(
+    logicModule.AURORA_AI_WELCOME_MESSAGE,
+    'Hey, future founder. What are we building today?'
+  );
+  assert.equal(
+    logicModule.AURORA_AI_INPUT_PLACEHOLDER,
+    'Ask Aurora AI anything about entrepreneurship...'
+  );
+  assert.deepEqual(Array.from(logicModule.AURORA_AI_SUGGESTED_PROMPTS), [
+    'Generate a startup idea',
+    'Solve a real-world problem',
+    'Help me build a startup',
+    'Create a business model',
+    'Prepare me for NEC',
+    'Explore an innovative solution',
+  ]);
+
+  const emptyReq = logicModule.validateAuroraAiRequest({ message: '   ' });
+  assert.equal(emptyReq.valid, false);
+  assert.ok(emptyReq.error);
+
+  const validReq = logicModule.validateAuroraAiRequest({
+    message: 'Generate a startup idea',
+    history: [
+      { role: 'user', text: 'Hi Aurora AI' },
+      { role: 'model', text: 'Hey, future founder. What are we building today?' },
+    ],
+  });
+  assert.equal(validReq.valid, true);
+  assert.equal(validReq.sanitizedMessage, 'Generate a startup idea');
+  assert.equal(validReq.sanitizedHistory.length, 2);
+
+  const necResponse = logicModule.buildAuroraAiStructuredFallback('Prepare me for NEC');
+  assert.equal(necResponse.includes('NEC Championship Execution Blueprint'), true);
+  assert.equal(necResponse.includes('Next 48-Hour Action Step'), true);
+
+  const ideaResponse = logicModule.buildAuroraAiStructuredFallback('Generate a startup idea');
+  assert.equal(ideaResponse.includes('3 High-Conviction Student Startup Opportunities'), true);
+});
+
 
