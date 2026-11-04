@@ -30,11 +30,18 @@ import {
   handleFirestoreError,
   OperationType,
   isFirestoreQuotaExceeded,
-  FIRESTORE_UPGRADE_URL,
-  subscribeQuotaExceeded,
   notifyQuotaExceeded,
 } from './lib/firebase';
-import { ExternalLink, AlertTriangle } from 'lucide-react';
+
+import {
+  INITIAL_EVENTS,
+  INITIAL_ACHIEVEMENTS,
+  INITIAL_STARTUPS,
+  INITIAL_NEC_MEMBERS,
+  INITIAL_LEADERSHIP,
+  INITIAL_SPONSORS,
+  INITIAL_USERS,
+} from './data/initialEcellData';
 
 import {
   formatCurrentDateTime,
@@ -106,7 +113,13 @@ function savePersistedSession(session: PersistedAuthSession | null): void {
 function loadLocalCache<T>(key: string, fallback: T): T {
   try {
     const raw = localStorage.getItem(`aurora_cache_${key}`);
-    if (raw) return JSON.parse(raw) as T;
+    if (raw) {
+      const parsed = JSON.parse(raw) as T;
+      if (Array.isArray(parsed) && parsed.length === 0 && Array.isArray(fallback) && fallback.length > 0) {
+        return fallback;
+      }
+      return parsed;
+    }
   } catch {
     // ignore storage errors
   }
@@ -128,33 +141,34 @@ export default function App() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [activeView, setActiveView] = useState<'portal' | 'admin'>('portal');
   const [accessDeniedNotice, setAccessDeniedNotice] = useState<string | null>(null);
-  const [quotaExceeded, setQuotaExceeded] = useState(false);
-
-  useEffect(() => {
-    return subscribeQuotaExceeded((exceeded) => {
-      setQuotaExceeded(exceeded);
-    });
-  }, []);
 
   // Auth UI state
   const [authError, setAuthError] = useState<string | null>(null);
   const [authSuccess, setAuthSuccess] = useState<string | null>(null);
   const [isSubmittingAuth, setIsSubmittingAuth] = useState(false);
 
-  // Application Data State (persisted with resilient local caching)
-  const [users, setUsers] = useState<UserProfileRecord[]>(() => loadLocalCache('users', []));
-  const [events, setEvents] = useState<EventRecord[]>(() => loadLocalCache('events', []));
-  const [achievements, setAchievements] = useState<AchievementRecord[]>(() =>
-    loadLocalCache('achievements', [])
+  // Application Data State (persisted with resilient local caching and rich default baselines)
+  const [users, setUsers] = useState<UserProfileRecord[]>(() =>
+    loadLocalCache('users', INITIAL_USERS)
   );
-  const [startups, setStartups] = useState<StartupRecord[]>(() => loadLocalCache('startups', []));
+  const [events, setEvents] = useState<EventRecord[]>(() =>
+    loadLocalCache('events', INITIAL_EVENTS)
+  );
+  const [achievements, setAchievements] = useState<AchievementRecord[]>(() =>
+    loadLocalCache('achievements', INITIAL_ACHIEVEMENTS)
+  );
+  const [startups, setStartups] = useState<StartupRecord[]>(() =>
+    loadLocalCache('startups', INITIAL_STARTUPS)
+  );
   const [necMembers, setNecMembers] = useState<NecMemberRecord[]>(() =>
-    loadLocalCache('nec_members', [])
+    loadLocalCache('nec_members', INITIAL_NEC_MEMBERS)
   );
   const [leadershipMembers, setLeadershipMembers] = useState<LeadershipRecord[]>(() =>
-    loadLocalCache('leadership', [])
+    loadLocalCache('leadership', INITIAL_LEADERSHIP)
   );
-  const [sponsors, setSponsors] = useState<SponsorRecord[]>(() => loadLocalCache('sponsors', []));
+  const [sponsors, setSponsors] = useState<SponsorRecord[]>(() =>
+    loadLocalCache('sponsors', INITIAL_SPONSORS)
+  );
   const [loginLogs, setLoginLogs] = useState<LoginActivityRecord[]>(() =>
     loadLocalCache('login_logs', [])
   );
@@ -202,7 +216,9 @@ export default function App() {
         }
       },
       (err) => {
-        console.warn('Could not load website branding logos:', err);
+        if (!isFirestoreQuotaExceeded(err)) {
+          console.warn('Could not load website branding logos:', err);
+        }
       }
     );
     return () => unsub();
@@ -441,8 +457,9 @@ export default function App() {
               authorId: String(data.authorId || ''),
             };
           });
-          setEvents(items);
-          saveLocalCache('events', items);
+          const finalItems = items.length > 0 ? items : INITIAL_EVENTS;
+          setEvents(finalItems);
+          saveLocalCache('events', finalItems);
         },
         (err) => handleFirestoreError(err, OperationType.LIST, 'events')
       )
@@ -470,8 +487,9 @@ export default function App() {
               authorId: String(data.authorId || ''),
             };
           });
-          setAchievements(items);
-          saveLocalCache('achievements', items);
+          const finalItems = items.length > 0 ? items : INITIAL_ACHIEVEMENTS;
+          setAchievements(finalItems);
+          saveLocalCache('achievements', finalItems);
         },
         (err) => handleFirestoreError(err, OperationType.LIST, 'achievements')
       )
@@ -502,8 +520,9 @@ export default function App() {
               authorId: String(data.authorId || ''),
             };
           });
-          setStartups(items);
-          saveLocalCache('startups', items);
+          const finalItems = items.length > 0 ? items : INITIAL_STARTUPS;
+          setStartups(finalItems);
+          saveLocalCache('startups', finalItems);
         },
         (err) => handleFirestoreError(err, OperationType.LIST, 'startups')
       )
@@ -531,8 +550,9 @@ export default function App() {
             };
           });
           const sorted = sortRecordsByDisplayOrder(items);
-          setNecMembers(sorted);
-          saveLocalCache('nec_members', sorted);
+          const finalItems = sorted.length > 0 ? sorted : INITIAL_NEC_MEMBERS;
+          setNecMembers(finalItems);
+          saveLocalCache('nec_members', finalItems);
         },
         (err) => handleFirestoreError(err, OperationType.LIST, 'nec_team')
       )
@@ -563,8 +583,9 @@ export default function App() {
             };
           });
           const sorted = sortRecordsByDisplayOrder(items);
-          setLeadershipMembers(sorted);
-          saveLocalCache('leadership', sorted);
+          const finalItems = sorted.length > 0 ? sorted : INITIAL_LEADERSHIP;
+          setLeadershipMembers(finalItems);
+          saveLocalCache('leadership', finalItems);
         },
         (err) => handleFirestoreError(err, OperationType.LIST, 'leadership')
       )
@@ -594,8 +615,9 @@ export default function App() {
             };
           });
           const sorted = sortRecordsByDisplayOrder(items);
-          setSponsors(sorted);
-          saveLocalCache('sponsors', sorted);
+          const finalItems = sorted.length > 0 ? sorted : INITIAL_SPONSORS;
+          setSponsors(finalItems);
+          saveLocalCache('sponsors', finalItems);
         },
         (err) => handleFirestoreError(err, OperationType.LIST, 'sponsors')
       )
@@ -619,8 +641,9 @@ export default function App() {
                 registrationTime: String(data.registrationTime || ''),
               };
             });
-            setUsers(list);
-            saveLocalCache('users', list);
+            const finalList = list.length > 0 ? list : INITIAL_USERS;
+            setUsers(finalList);
+            saveLocalCache('users', finalList);
           },
           (err) => handleFirestoreError(err, OperationType.LIST, 'users')
         )
@@ -1820,51 +1843,21 @@ export default function App() {
     );
   }
 
-  const renderQuotaBanner = () => {
-    if (!quotaExceeded) return null;
-    return (
-      <aside
-        role="status"
-        aria-label="Firestore Database Quota Notice"
-        className="bg-[#141416]/95 border-b border-[#FF3030]/40 px-4 py-2.5 text-xs text-white flex flex-wrap items-center justify-between gap-3 sticky top-0 z-50 backdrop-blur-md shadow-[0_4px_20px_rgba(255,48,48,0.15)]"
-      >
-        <div className="flex items-center gap-2">
-          <AlertTriangle className="w-4 h-4 text-[#FF3030] shrink-0" />
-          <span className="text-[#A1A1AA]">
-            <strong className="text-white font-semibold">Firestore Daily Free Read Limit Reached:</strong> Serving cached records while database quota resets tomorrow (or upgrade in console to uncap reads).
-          </span>
-        </div>
-        <a
-          href={FIRESTORE_UPGRADE_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="px-3 py-1 bg-[#FF3030]/20 hover:bg-[#FF3030]/30 border border-[#FF3030]/50 text-white font-medium rounded-lg text-xs whitespace-nowrap shrink-0 flex items-center gap-1.5 transition-colors cursor-pointer"
-        >
-          <span>Open Database Upgrade Dialog</span>
-          <ExternalLink className="w-3 h-3 text-[#FF3030]" />
-        </a>
-      </aside>
-    );
-  };
-
   if (!currentUserProfile) {
     return (
-      <>
-        {renderQuotaBanner()}
-        <AuthScreen
-          onEmailLogin={handleEmailLogin}
-          onEmailRegister={handleEmailRegister}
-          onPasswordReset={handlePasswordReset}
-          authError={authError}
-          authSuccess={authSuccess}
-          clearMessages={() => {
-            setAuthError(null);
-            setAuthSuccess(null);
-          }}
-          isSubmitting={isSubmittingAuth}
-          websiteBranding={websiteBranding}
-        />
-      </>
+      <AuthScreen
+        onEmailLogin={handleEmailLogin}
+        onEmailRegister={handleEmailRegister}
+        onPasswordReset={handlePasswordReset}
+        authError={authError}
+        authSuccess={authSuccess}
+        clearMessages={() => {
+          setAuthError(null);
+          setAuthSuccess(null);
+        }}
+        isSubmitting={isSubmittingAuth}
+        websiteBranding={websiteBranding}
+      />
     );
   }
 
@@ -1879,7 +1872,6 @@ export default function App() {
 
   return (
     <>
-      {renderQuotaBanner()}
 
       {accessDeniedNotice && (
         <div

@@ -133,12 +133,8 @@ async function testConnection() {
   } catch (error) {
     if (isFirestoreQuotaExceeded(error)) {
       notifyQuotaExceeded();
-      console.warn(
-        'Firestore free daily read units limit reached. Fallback cache enabled. Upgrade via:',
-        FIRESTORE_UPGRADE_URL
-      );
     } else if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.error('Please check your Firebase configuration.');
+      console.warn('Firebase connection offline or sleeping.');
     }
   }
 }
@@ -177,9 +173,6 @@ export function handleFirestoreError(
 ): void {
   if (isFirestoreQuotaExceeded(error)) {
     notifyQuotaExceeded();
-    console.warn(
-      `[Firestore Quota Exceeded] Path '${path}' read limit reached for today. Reads will resume after daily quota reset or project upgrade: ${FIRESTORE_UPGRADE_URL}`
-    );
     return;
   }
 

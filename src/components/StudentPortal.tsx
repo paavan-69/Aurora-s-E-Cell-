@@ -411,13 +411,19 @@ export function StudentPortal({
                   key={`${sp.id}-marquee-${i}`}
                   className="flex items-center gap-4 px-5 py-2.5 rounded-xl bg-[#0B0B0D]/90 border border-white/10 group shrink-0"
                 >
-                  <img
-                    src={sp.logoUrl}
-                    alt={sp.name}
-                    referrerPolicy="no-referrer"
-                    style={{ objectFit: 'contain' }}
-                    className="h-9 w-auto max-w-[130px] object-contain grayscale opacity-80 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-300"
-                  />
+                  {sp.logoUrl ? (
+                    <img
+                      src={sp.logoUrl}
+                      alt={sp.name}
+                      referrerPolicy="no-referrer"
+                      style={{ objectFit: 'contain' }}
+                      className="h-9 w-auto max-w-[130px] object-contain grayscale opacity-80 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-300"
+                    />
+                  ) : (
+                    <div className="w-9 h-9 rounded-lg bg-[#FF3030]/15 border border-[#FF3030]/30 flex items-center justify-center shrink-0">
+                      <Handshake className="w-5 h-5 text-[#FF3030]" />
+                    </div>
+                  )}
                   <div className="text-left">
                     <div className="font-display font-bold text-xs text-white whitespace-nowrap">
                       {sp.name}
@@ -448,13 +454,22 @@ export function StudentPortal({
                     className="aurora-card rounded-2xl p-6 group"
                   >
                     <div className="h-28 flex items-center justify-center p-4 bg-[#0B0B0D] rounded-xl border border-white/10 mb-4">
-                      <img
-                        src={sponsor.logoUrl}
-                        alt={sponsor.name}
-                        referrerPolicy="no-referrer"
-                        style={{ objectFit: 'contain' }}
-                        className="max-h-20 max-w-full object-contain grayscale opacity-85 group-hover:grayscale-0 group-hover:opacity-100 group-hover:scale-105 transition-all duration-300"
-                      />
+                      {sponsor.logoUrl ? (
+                        <img
+                          src={sponsor.logoUrl}
+                          alt={sponsor.name}
+                          referrerPolicy="no-referrer"
+                          style={{ objectFit: 'contain' }}
+                          className="max-h-20 max-w-full object-contain grayscale opacity-85 group-hover:grayscale-0 group-hover:opacity-100 group-hover:scale-105 transition-all duration-300"
+                        />
+                      ) : (
+                        <div className="flex flex-col items-center justify-center text-center gap-1.5 p-3">
+                          <Handshake className="w-8 h-8 text-[#FF3030] opacity-90" />
+                          <span className="font-mono text-[10px] text-[#A1A1AA] uppercase tracking-wider">
+                            SPONSOR LOGO
+                          </span>
+                        </div>
+                      )}
                     </div>
                     <div className="flex items-center justify-between gap-2 pt-2 border-t border-white/10">
                       <h3 className="font-display font-bold text-base text-white truncate">
@@ -487,13 +502,22 @@ export function StudentPortal({
                     className="aurora-card rounded-2xl p-6 group"
                   >
                     <div className="h-28 flex items-center justify-center p-4 bg-[#0B0B0D] rounded-xl border border-white/10 mb-4">
-                      <img
-                        src={partner.logoUrl}
-                        alt={partner.name}
-                        referrerPolicy="no-referrer"
-                        style={{ objectFit: 'contain' }}
-                        className="max-h-20 max-w-full object-contain grayscale opacity-85 group-hover:grayscale-0 group-hover:opacity-100 group-hover:scale-105 transition-all duration-300"
-                      />
+                      {partner.logoUrl ? (
+                        <img
+                          src={partner.logoUrl}
+                          alt={partner.name}
+                          referrerPolicy="no-referrer"
+                          style={{ objectFit: 'contain' }}
+                          className="max-h-20 max-w-full object-contain grayscale opacity-85 group-hover:grayscale-0 group-hover:opacity-100 group-hover:scale-105 transition-all duration-300"
+                        />
+                      ) : (
+                        <div className="flex flex-col items-center justify-center text-center gap-1.5 p-3">
+                          <Handshake className="w-8 h-8 text-[#FF3030] opacity-90" />
+                          <span className="font-mono text-[10px] text-[#A1A1AA] uppercase tracking-wider">
+                            PARTNER LOGO
+                          </span>
+                        </div>
+                      )}
                     </div>
                     <div className="flex items-center justify-between gap-2 pt-2 border-t border-white/10">
                       <h3 className="font-display font-bold text-base text-white truncate">

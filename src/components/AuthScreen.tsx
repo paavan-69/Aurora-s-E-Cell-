@@ -134,7 +134,7 @@ export function AuthScreen({
 
       {/* Main Split-Screen Futuristic Aurora Auth Canvas */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12 grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-stretch">
-        {/* Left Column: Cinematic Headline & 3D Interactive Crimson Nexus */}
+        {/* Left Column: Cinematic Headline & Venture Showcase */}
         <div className="lg:col-span-7 flex flex-col justify-between gap-6">
           <div className="aurora-card rounded-2xl p-6 md:p-8 relative overflow-hidden">
             <div

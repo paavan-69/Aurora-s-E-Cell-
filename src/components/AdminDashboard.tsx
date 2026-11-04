@@ -24,6 +24,7 @@ import {
   Sparkles,
   Handshake,
   Crown,
+  GraduationCap,
 } from 'lucide-react';
 import {
   MAX_NEC_MEMBERS,
@@ -2193,12 +2194,16 @@ export function AdminDashboard({
                         className="p-3.5 bg-[#0B0B0D] border border-white/10 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:border-white/20 transition-colors"
                       >
                         <div className="flex items-center gap-3.5 min-w-0">
-                          <div className="w-12 h-12 rounded-xl overflow-hidden bg-[#141416] border border-white/15 shrink-0">
-                            <img
-                              src={member.photoUrl}
-                              alt={member.name}
-                              className="w-full h-full object-cover"
-                            />
+                          <div className="w-12 h-12 rounded-xl overflow-hidden bg-[#141416] border border-white/15 shrink-0 flex items-center justify-center">
+                            {member.photoUrl ? (
+                              <img
+                                src={member.photoUrl}
+                                alt={member.name}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <Users className="w-5 h-5 text-[#FF3030]" />
+                            )}
                           </div>
                           <div className="min-w-0">
                             <div className="flex items-center gap-2 text-[10px] font-mono">
@@ -2496,12 +2501,16 @@ export function AdminDashboard({
                         className="p-3.5 bg-[#0B0B0D] border border-white/10 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4"
                       >
                         <div className="flex items-center gap-3.5 min-w-0">
-                          <div className="w-12 h-12 rounded-xl overflow-hidden bg-[#141416] border border-white/15 shrink-0">
-                            <img
-                              src={leader.photoUrl}
-                              alt={leader.name}
-                              className="w-full h-full object-cover"
-                            />
+                          <div className="w-12 h-12 rounded-xl overflow-hidden bg-[#141416] border border-white/15 shrink-0 flex items-center justify-center">
+                            {leader.photoUrl ? (
+                              <img
+                                src={leader.photoUrl}
+                                alt={leader.name}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <GraduationCap className="w-5 h-5 text-[#FF3030]" />
+                            )}
                           </div>
                           <div className="min-w-0">
                             <div className="flex items-center gap-2 text-[10px] font-mono">
@@ -2760,11 +2769,15 @@ export function AdminDashboard({
                       >
                         <div className="flex items-center gap-3.5 min-w-0">
                           <div className="w-16 h-12 rounded-xl bg-[#050505] border border-white/15 p-2 flex items-center justify-center shrink-0">
-                            <img
-                              src={sp.logoUrl}
-                              alt={sp.name}
-                              className="max-h-full max-w-full object-contain"
-                            />
+                            {sp.logoUrl ? (
+                              <img
+                                src={sp.logoUrl}
+                                alt={sp.name}
+                                className="max-h-full max-w-full object-contain"
+                              />
+                            ) : (
+                              <Handshake className="w-5 h-5 text-[#FF3030]" />
+                            )}
                           </div>
                           <div className="min-w-0">
                             <div className="flex items-center gap-2 text-[10px] font-mono">
