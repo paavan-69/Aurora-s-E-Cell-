@@ -765,8 +765,8 @@ apiRouter.post('/admin/validate-nec-member', async (req: Request, res: Response)
 
 /**
  * POST /api/aurora-ai
- * Server-side AI Entrepreneurship Assistant endpoint powered by @google/genai (gemini-3.8-flash).
- * Never exposes API keys to the browser and supports multi-turn conversational context.
+ * Server-side AI Assistant endpoint powered by @google/genai.
+ * Never exposes API keys to the browser and supports multi-turn conversational context for any question.
  */
 apiRouter.post('/aurora-ai', async (req: Request, res: Response) => {
   const validation = validateAuroraAiRequest({
@@ -784,62 +784,65 @@ apiRouter.post('/aurora-ai', async (req: Request, res: Response) => {
   const geminiApiKey = (process.env.GEMINI_API_KEY || '').trim();
 
   if (!geminiApiKey) {
-    const fallbackReply = buildAuroraAiStructuredFallback(sanitizedMessage, sanitizedHistory);
-    return res.status(200).json({
-      reply: fallbackReply,
-      model: 'aurora-strategy-engine',
+    return res.status(503).json({
+      error: 'Aurora AI service is initializing. Please check your GEMINI_API_KEY configuration.',
     });
   }
 
-  try {
-    const ai = new GoogleGenAI({
-      apiKey: geminiApiKey,
-      httpOptions: {
-        headers: {
-          'User-Agent': 'aistudio-build',
+  const ai = new GoogleGenAI({
+    apiKey: geminiApiKey,
+    httpOptions: {
+      headers: {
+        'User-Agent': 'aistudio-build',
+      },
+      timeout: 20000,
+    },
+  });
+
+  const contents = [
+    ...sanitizedHistory.map((turn) => ({
+      role: turn.role,
+      parts: [{ text: turn.text }],
+    })),
+    {
+      role: 'user' as const,
+      parts: [{ text: sanitizedMessage }],
+    },
+  ];
+
+  const candidateModels = ['gemini-3.1-flash-lite', 'gemini-3.8-flash'] as const;
+  let lastError: unknown = null;
+
+  for (const modelName of candidateModels) {
+    try {
+      const response = await ai.models.generateContent({
+        model: modelName,
+        contents,
+        config: {
+          systemInstruction: AURORA_AI_SYSTEM_INSTRUCTION,
         },
-      },
-    });
-
-    const contents = [
-      ...sanitizedHistory.map((turn) => ({
-        role: turn.role,
-        parts: [{ text: turn.text }],
-      })),
-      {
-        role: 'user' as const,
-        parts: [{ text: sanitizedMessage }],
-      },
-    ];
-
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.8-flash',
-      contents,
-      config: {
-        systemInstruction: AURORA_AI_SYSTEM_INSTRUCTION,
-      },
-    });
-
-    const text = (response.text ?? '').trim();
-    if (!text) {
-      return res.status(200).json({
-        reply: buildAuroraAiStructuredFallback(sanitizedMessage, sanitizedHistory),
-        model: 'aurora-strategy-engine',
       });
-    }
 
-    return res.status(200).json({
-      reply: text,
-      model: 'gemini-3.8-flash',
-    });
-  } catch (err: unknown) {
-    console.error('Aurora AI Gemini generation error:', err);
-    const fallbackReply = buildAuroraAiStructuredFallback(sanitizedMessage, sanitizedHistory);
-    return res.status(200).json({
-      reply: fallbackReply,
-      model: 'aurora-strategy-engine',
-    });
+      const text = (response.text ?? '').trim();
+      if (text) {
+        return res.status(200).json({
+          reply: text,
+          model: modelName,
+        });
+      }
+    } catch (err: unknown) {
+      lastError = err;
+      console.warn(`Aurora AI model ${modelName} attempt failed:`, err instanceof Error ? err.message : err);
+    }
   }
+
+  console.error('Aurora AI Gemini generation error:', lastError);
+  return res.status(502).json({
+    error:
+      lastError instanceof Error
+        ? `Aurora AI encountered an upstream error: ${lastError.message}`
+        : 'Aurora AI is temporarily busy. Please try your question again in a moment.',
+  });
 });
 
 // Mount API routes on both /api and / so Vercel serverless rewrites work regardless of path prefixing

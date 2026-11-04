@@ -627,20 +627,13 @@ export function AuroraAiExperience() {
       window.setTimeout(() => {
         setCoreState('idle');
       }, 1200);
-    } catch {
-      // Resilient fallback so the founder experience never stalls
-      const fallbackReply = buildAuroraAiStructuredFallback(trimmed, priorHistory);
-      setCoreState('responding');
-      const aiMsg: AuroraAiChatMessage = {
-        id: generateSafeId('msg_ai'),
-        role: 'model',
-        text: fallbackReply,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      };
-      setMessages((prev) => [...prev, aiMsg]);
-      window.setTimeout(() => {
-        setCoreState('idle');
-      }, 1200);
+    } catch (err: unknown) {
+      setErrorText(
+        err instanceof Error
+          ? err.message
+          : 'Unable to reach Aurora AI right now. Please try again.'
+      );
+      setCoreState('idle');
     } finally {
       setIsLoading(false);
     }
